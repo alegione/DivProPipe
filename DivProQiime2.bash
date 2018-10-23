@@ -24,6 +24,8 @@ source activate qiime2
 #Make tab completion available
 source tab-qiime
 
+# Look for a 'Parameters' text file in a 'metadata' folder that stores the user input
+# If no file is present, or the variables are present in the file, set the variables to 'nil'
 if [ -e "$1/Metadata/Parameters.txt" ]; then
 	echo -e "${BLUE}Parameter file detected...obtaining previously entered options${NOCOLOUR}"
 	ParFile="$1/Metadata/Parameters.txt"
@@ -65,7 +67,8 @@ else
 	Truncate="nil"
 fi
 
-#ask user the name of the project for file name/directory purposes
+# If running for the first time ask user the name of the project for
+# file and directory naming purposes
 if [ $Dir == "nil" ]; then
 	Switch=0
 	while [ "$Switch" -eq "0" ]; do
