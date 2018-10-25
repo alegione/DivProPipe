@@ -208,9 +208,15 @@ if [ $taxa == "nil" ]; then
 	fi
 fi
 
+
+forwardPrimer="CCTAYGGGRBGCASCAG"
+reversePrimer="GGACTACNNGGGTATCTAAT"
+readFormat="PairedEndFastqManifestPhred33"
+
+
 Progress="$Dir/$Project.progress.txt"
 
-if [ ! -e "$ProjectDir/Metadata/$Project.txt" ]; then
+if [ ! -e "$ProjectDir/Metadata/$Project.tsv" ]; then
 	Switch=0
 	while [ "$Switch" -eq "0" ]; do
 		echo -e "${BLUE}Please indicate the location of your Metadata/Mapping file${NOCOLOUR}"
@@ -219,13 +225,14 @@ if [ ! -e "$ProjectDir/Metadata/$Project.txt" ]; then
 			Switch=1
 			echo -e "${BLUE}You entered ${GREEN}$Mapping${NOCOLOUR}"
 			echo -e "${BLUE}Moving mapping file to ${GREEN}$ProjectDir/Metadata/$Project.qzv${NOCOLOUR}" | tee -a $Progress
-			# cat $Mapping > "$ProjectDir/Metadata/$Project.tsv"
+			cat $Mapping > "$ProjectDir/Metadata/$Project.tsv"
 			# Load metadata file into qiime2
 			qiime metadata tabulate \
 				--m-input-file "$Mapping" \
 				--o-visualization "$ProjectDir/Metadata/$Project.tabulated-sample-metadata.qzv"
 			# MapHead="$ProjectDir/Metadata/$Project.head.tsv"
 			# head -1 $Mapping > $MapHead
+			Mapping="$ProjectDir/Metadata/$Project.tsv"
 		else
 			echo -e "${RED}File does not exist: ${GREEN}$Mapping${NOCOLOUR}"
 		fi
@@ -241,7 +248,7 @@ if [ ! -e "$ProjectDir/Original_reads/original-paired-end.qza" ]; then
 		     --type 'SampleData[PairedEndSequencesWithQuality]' \
 		     --input-path "$ProjectDir/Metadata/import-list.csv" \
 		     --output-path "$ProjectDir/Original_reads/original-paired-end.qza" \
-		     --source-format PairedEndFastqManifestPhred33 # make this a selecctable variable
+		     --source-format $readFormat # make this a selecctable variable
 fi
 
 # Run dada2 on paired end reads, trimming 15 bases from left and right, and truncating reads longer than 300 bp (should be none!)
@@ -280,8 +287,8 @@ if [ ! -e "16S_metagenomics/ReferenceSets/SILVA/97-V3V4-classifier.qza" ]; then
 	     # Remove sections of reads outside V3-V4, better for classifier
 	qiime feature-classifier extract-reads \
 	     --i-sequences 16S_metagenomics/ReferenceSets/SILVA/rep_set/rep_set_16S_only/97/silva_132_97_16S.qza \
-	     --p-f-primer CCTAYGGGRBGCASCAG \
-	     --p-r-primer GGACTACNNGGGTATCTAAT \
+	     --p-f-primer $forwardPrimer \
+	     --p-r-primer $reversePrimer \
 	     --o-reads 16S_metagenomics/ReferenceSets/SILVA/rep_set/rep_set_16S_only/97/silva_132_97_16S_V3V4.qza
 
 	     # Run naive bayes classifier on samples (training of classifier)
@@ -295,13 +302,20 @@ fi
      # Use sklearn to classify taxonomy of the representative reads
 qiime feature-classifier classify-sklearn \
      --i-classifier 16S_metagenomics/ReferenceSets/SILVA/97-V3V4-classifier.qza \
-     --i-reads Collaboration/NataliKrekler/First_round_reads/OTUs/rep-seqs.qza \
-     --o-classification Collaboration/NataliKrekler/First_round_reads/taxonomy.qza
+     --i-reads "$ProjectDir/dada2/dada2-rep-seqs.qza" \
+     --o-classification "$ProjectDir/Taxonomy/$taxa/absolute/$Project.taxa.qza"
 
      # Can't remember what this does...generates an output of the taxa to view?
 qiime metadata tabulate \
-     --m-input-file Collaboration/NataliKrekler/First_round_reads/taxonomy.qza \
-     --o-visualization Collaboration/NataliKrekler/First_round_reads/taxonomy.qva
+     --m-input-file "$ProjectDir/Taxonomy/$taxa/absolute/$Project.taxa.qza" \
+     --o-visualization "$ProjectDir/Taxonomy/$taxa/absolute/$Project.taxa.qva"
+
+
+		 qiime taxa barplot \
+	   --i-table table.qza \
+	   --i-taxonomy "$ProjectDir/Taxonomy/$taxa/absolute/$Project.taxa.qza" \
+	   --m-metadata-file $Mapping \
+	   --o-visualization "$ProjectDir/Taxonomy/$taxa/absolute/$Project.taxa-bar-plots.qzv"
 
 ##### COPIED FROM TUTORIALS, HAVEN'T RUN ANY OF THESE
 
@@ -325,11 +339,6 @@ qiime feature-table tabulate-seqs \
     --m-input-file taxonomy.qza \
     --o-visualization taxonomy.qzv
 
-  qiime taxa barplot \
-  --i-table table.qza \
-  --i-taxonomy taxonomy.qza \
-  --m-metadata-file sample-metadata.tsv \
-  --o-visualization taxa-bar-plots.qzv
 
 # Differential abundance testing with ANCOM
 
