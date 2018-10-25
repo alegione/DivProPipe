@@ -93,7 +93,7 @@ fi
 if [ $Project == "nil" ]; then
 #ask user the name of the project for file name/directory purposes
 	echo -e "${BLUE}Please enter a project title:${NOCOLOUR}"
-	read Project
+	read -e Project
 	echo -e "${BLUE}You entered: ${GREEN}$Project${NOCOLOUR}"
 fi
 
@@ -172,7 +172,7 @@ fi
 
 if ! grep -i -q "Diversity profile target" $ParFile; then echo -e "Diversity profile target	$divprotarget" >> $ParFile; fi
 
-#Would be good to change this to a 'case'
+# Would be good to change this to a 'case'
 if [ $taxa == "nil" ]; then
 	if [ $divprotarget == "ITS"]; then
 		taxa="ITS"
@@ -180,8 +180,7 @@ if [ $taxa == "nil" ]; then
 		Switch=0
 		while [ "$Switch" -eq "0" ]; do
 			echo -e "${BLUE}Would you like the use Greengenes or SILVA for classification? Enter one${NOCOLOUR}"
-			read -N 1 taxa
-			echo -e "\n"
+			read -e -N 1 taxa
 			taxa=$(echo -e "$taxa" | tr '[:upper:]' '[:lower:]')
 			if [ $taxa = "g" ]; then
 				Switch=1
@@ -196,15 +195,16 @@ if [ $taxa == "nil" ]; then
 			fi
 		done
 	fi
-if ! grep -i -q "Taxonomy database" $ParFile; then echo -e "Taxonomy database	$taxa" >> $ParFile; fi
+
+	if ! grep -i -q "Taxonomy database" $ParFile; then echo -e "Taxonomy database	$taxa" >> $ParFile; fi
 
 	if [ ! -d "$ProjectDir/Taxonomy" ]; then
-		mkdir $ProjectDir/Taxonomy/
-		mkdir $ProjectDir/Taxonomy/$taxa
-		mkdir $ProjectDir/Taxonomy/$taxa/absolute
-		mkdir $ProjectDir/Taxonomy/$taxa/relative
-		mkdir $ProjectDir/Taxonomy/$taxa/norm
-		mkdir $ProjectDir/Taxonomy/$taxa/no1pct
+		mkdir "$ProjectDir/Taxonomy/"
+		mkdir "$ProjectDir/Taxonomy/$taxa"
+		mkdir "$ProjectDir/Taxonomy/$taxa/absolute"
+		mkdir "$ProjectDir/Taxonomy/$taxa/relative"
+		mkdir "$ProjectDir/Taxonomy/$taxa/norm"
+		mkdir "$ProjectDir/Taxonomy/$taxa/no1pct"
 	fi
 fi
 
@@ -233,51 +233,64 @@ if [ ! -e "$ProjectDir/Metadata/$Project.txt" ]; then
 fi
 
 #Import reads to qiime format from 'import-list' generated with previous code
-qiime tools import \
-     --type 'SampleData[PairedEndSequencesWithQuality]' \
-     --input-path ../import-list.csv \
-     --output-path original-paired-end.qza \
-     --source-format PairedEndFastqManifestPhred33
+if [ ! -e "$ProjectDir/Original_reads/original-paired-end.qza" ]; then
+			if [ ! -d  "$ProjectDir/Original_reads" ]; then
+				mkdir "$ProjectDir/Original_reads"
+			fi
+			qiime tools import \
+		     --type 'SampleData[PairedEndSequencesWithQuality]' \
+		     --input-path "$ProjectDir/Metadata/import-list.csv" \
+		     --output-path "$ProjectDir/Original_reads/original-paired-end.qza" \
+		     --source-format PairedEndFastqManifestPhred33 # make this a selecctable variable
+fi
 
 # Run dada2 on paired end reads, trimming 15 bases from left and right, and truncating reads longer than 300 bp (should be none!)
-qiime dada2 denoise-paired \
-     --i-demultiplexed-seqs original-paired-end.qza \
-     --p-trim-left-f 15 \
-     --p-trim-left-r 15 \
-     --p-trunc-len-f 300 \
-     --p-trunc-len-r 300 \
-     --o-table dada2-out-table.qza \
-     --o-representative-sequences dada2-rep-seqs.qza \
-     --o-denoising-stats dada2-denoising-stats.qza
 
+if [ ! -e "$ProjectDir/dada2/dada2-rep-seqs.qza" ]; then
+	if [ ! -d "$ProjectDir/dada2" ]; then
+		mkdir "$ProjectDir/dada2"
+	fi
+	qiime dada2 denoise-paired \
+	     --i-demultiplexed-seqs "$ProjectDir/Original_reads/original-paired-end.qza" \
+	     --p-trim-left-f 15 \
+	     --p-trim-left-r 15 \
+	     --p-trunc-len-f 300 \
+	     --p-trunc-len-r 300 \
+	     --o-table "$ProjectDir/dada2/dada2-out-table.qza" \
+	     --o-representative-sequences "$ProjectDir/dada2/dada2-rep-seqs.qza" \
+	     --o-denoising-stats "$ProjectDir/dada2/dada2-denoising-stats.qza"
+fi
 # Have only run the below once, using representative sequences from the old script, not dada2
 
-     # Load SILVA representative sequences
-qiime tools import \
-     --type 'FeatureData[Sequence]' \
-     --input-path ~/Sequences/16S_metagenomics/ReferenceSets/SILVA/rep_set/rep_set_16S_only/97/silva_132_97_16S.fna \
-     --output-path ~/Sequences/16S_metagenomics/ReferenceSets/SILVA/rep_set/rep_set_16S_only/97/silva_132_97_16S.qza
+if [ ! -e "16S_metagenomics/ReferenceSets/SILVA/97-V3V4-classifier.qza" ]; then
+		if [ -e ~/Sequences/16S_metagenomics/ReferenceSets/SILVA/rep_set/rep_set_16S_only/97/silva_132_97_16S.qza ]; then
+	     # Load SILVA representative sequences
+	qiime tools import \
+	     --type 'FeatureData[Sequence]' \
+	     --input-path ~/Sequences/16S_metagenomics/ReferenceSets/SILVA/rep_set/rep_set_16S_only/97/silva_132_97_16S.fna \
+	     --output-path ~/Sequences/16S_metagenomics/ReferenceSets/SILVA/rep_set/rep_set_16S_only/97/silva_132_97_16S.qza
+		 fi
+	     # Load associated SILVA taxonomy
+	qiime tools import \
+	     --type 'FeatureData[Taxonomy]' \
+	     --source-format HeaderlessTSVTaxonomyFormat \
+	     --input-path ~/Sequences/16S_metagenomics/ReferenceSets/SILVA/taxonomy/16S_only/97/consensus_taxonomy_all_levels.txt \
+	     --output-path ~/Sequences/16S_metagenomics/ReferenceSets/SILVA/taxonomy/16S_only/97/consensus_taxonomy_all_levels.qza
 
-     # Load associated SILVA taxonomy
-qiime tools import \
-     --type 'FeatureData[Taxonomy]' \
-     --source-format HeaderlessTSVTaxonomyFormat \
-     --input-path ~/Sequences/16S_metagenomics/ReferenceSets/SILVA/taxonomy/16S_only/97/consensus_taxonomy_all_levels.txt \
-     --output-path ~/Sequences/16S_metagenomics/ReferenceSets/SILVA/taxonomy/16S_only/97/consensus_taxonomy_all_levels.qza
+	     # Remove sections of reads outside V3-V4, better for classifier
+	qiime feature-classifier extract-reads \
+	     --i-sequences 16S_metagenomics/ReferenceSets/SILVA/rep_set/rep_set_16S_only/97/silva_132_97_16S.qza \
+	     --p-f-primer CCTAYGGGRBGCASCAG \
+	     --p-r-primer GGACTACNNGGGTATCTAAT \
+	     --o-reads 16S_metagenomics/ReferenceSets/SILVA/rep_set/rep_set_16S_only/97/silva_132_97_16S_V3V4.qza
 
-     # Remove sections of reads outside V3-V4, better for classifier
-qiime feature-classifier extract-reads \
-     --i-sequences 16S_metagenomics/ReferenceSets/SILVA/rep_set/rep_set_16S_only/97/silva_132_97_16S.qza \
-     --p-f-primer CCTAYGGGRBGCASCAG \
-     --p-r-primer GGACTACNNGGGTATCTAAT \
-     --o-reads 16S_metagenomics/ReferenceSets/SILVA/rep_set/rep_set_16S_only/97/silva_132_97_16S_V3V4.qza
-
-     # Run naive bayes classifier on samples (training of classifier)
-qiime feature-classifier fit-classifier-naive-bayes \
-     --i-reference-reads 16S_metagenomics/ReferenceSets/SILVA/rep_set/rep_set_16S_only/97/silva_132_97_16S_V3V4.qza \
-     --i-reference-taxonomy 16S_metagenomics/ReferenceSets/SILVA/taxonomy/16S_only/97/consensus_taxonomy_all_levels.qza \
-     --o-classifier 16S_metagenomics/ReferenceSets/SILVA/97-V3V4-classifier.qza \
-     --verbose
+	     # Run naive bayes classifier on samples (training of classifier)
+	qiime feature-classifier fit-classifier-naive-bayes \
+	     --i-reference-reads 16S_metagenomics/ReferenceSets/SILVA/rep_set/rep_set_16S_only/97/silva_132_97_16S_V3V4.qza \
+	     --i-reference-taxonomy 16S_metagenomics/ReferenceSets/SILVA/taxonomy/16S_only/97/consensus_taxonomy_all_levels.qza \
+	     --o-classifier 16S_metagenomics/ReferenceSets/SILVA/97-V3V4-classifier.qza \
+	     --verbose
+fi
 
      # Use sklearn to classify taxonomy of the representative reads
 qiime feature-classifier classify-sklearn \
