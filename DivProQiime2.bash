@@ -93,7 +93,7 @@ fi
 if [ $Project == "nil" ]; then
 #ask user the name of the project for file name/directory purposes
 	echo -e "${BLUE}Please enter a project title:${NOCOLOUR}"
-	read Project
+	read -e Project
 	echo -e "${BLUE}You entered: ${GREEN}$Project${NOCOLOUR}"
 fi
 
@@ -183,8 +183,7 @@ if [ $taxa == "nil" ]; then
 		Switch=0
 		while [ "$Switch" -eq "0" ]; do
 			echo -e "${BLUE}Would you like the use Greengenes or SILVA for classification? Enter one${NOCOLOUR}"
-			read -N 1 taxa
-			echo -e "\n"
+			read -e -N 1 taxa
 			taxa=$(echo -e "$taxa" | tr '[:upper:]' '[:lower:]')
 			if [ $taxa = "g" ]; then
 				Switch=1
@@ -227,37 +226,46 @@ if [ ! -e "$ProjectDir/Metadata/$Project.txt" ]; then
 fi
 
 #Import reads to qiime format from 'import-list' generated with previous code
-qiime tools import \
-     --type 'SampleData[PairedEndSequencesWithQuality]' \
-     --input-path ../import-list.csv \
-     --output-path $ProjectDir/original-paired-end.qza \
-     --source-format PairedEndFastqManifestPhred33
+if [ ! -e "$ProjectDir/Original_reads/original-paired-end.qza" ]; then
+			if [ ! -d  "$ProjectDir/Original_reads" ]; then
+				mkdir "$ProjectDir/Original_reads"
+			fi
+			qiime tools import \
+		     --type 'SampleData[PairedEndSequencesWithQuality]' \
+		     --input-path "$ProjectDir/Metadata/import-list.csv" \
+		     --output-path "$ProjectDir/Original_reads/original-paired-end.qza" \
+		     --source-format PairedEndFastqManifestPhred33 # make this a selecctable variable
+fi
 
 # Run dada2 on paired end reads, trimming 15 bases from left and right, and truncating reads longer than 300 bp (should be none!)
-if [ ! -e "$ProjectDir/dada2/rep-seqs.qza" ]; then
+
+if [ ! -e "$ProjectDir/dada2/dada2-rep-seqs.qza" ]; then
+	if [ ! -d "$ProjectDir/dada2" ]; then
+		mkdir "$ProjectDir/dada2"
+	fi
 	qiime dada2 denoise-paired \
-	     --i-demultiplexed-seqs $ProjectDir/original-paired-end.qza \
+	     --i-demultiplexed-seqs "$ProjectDir/Original_reads/original-paired-end.qza" \
 	     --p-trim-left-f 15 \
 	     --p-trim-left-r 15 \
 	     --p-trunc-len-f 300 \
 	     --p-trunc-len-r 300 \
-	     --o-table $ProjectDir/dada2/out-table.qza \
-	     --o-representative-sequences $ProjectDir/dada2/rep-seqs.qza \
-	     --o-denoising-stats $ProjectDir/dada2/denoising-stats.qza
+	     --o-table "$ProjectDir/dada2/out-table.qza" \
+	     --o-representative-sequences "$ProjectDir/dada2/rep-seqs.qza" \
+	     --o-denoising-stats "$ProjectDir/dada2/denoising-stats.qza"
 fi
 
-if [ ! -e $ProjectDir/dada2/out-table.qzv ]; then
+if [ ! -e "$ProjectDir/dada2/out-table.qzv" ]; then
 	#FeatureTable and FeatureData summaries
 	qiime feature-table summarize \
-	  --i-table $ProjectDir/dada2/out-table.qza \
-	  --o-visualization $ProjectDir/dada2/out-table.qzv \
+	  --i-table "$ProjectDir/dada2/out-table.qza" \
+	  --o-visualization "$ProjectDir/dada2/out-table.qzv" \
 	  --m-sample-metadata-file "$ProjectDir/Metadata/$Project.metadata.tsv"
 fi
 
-if [ ! -e $ProjectDir/dada2/out-table.qzv ]; then
+if [ ! -e "$ProjectDir/dada2/out-table.qzv" ]; then
 	qiime feature-table tabulate-seqs \
-	  --i-data $ProjectDir/dada2/rep-seqs.qza \
-	  --o-visualization $ProjectDir/dada2/rep-seqs.qzv
+	  --i-data "$ProjectDir/dada2/rep-seqs.qza" \
+	  --o-visualization "$ProjectDir/dada2/rep-seqs.qzv"
 fi
 
 if [ ! -e ~/Sequences/16S_metagenomics/ReferenceSets/SILVA/rep_set/rep_set_16S_only/97/silva_132_97_16S.qza ]; then
@@ -304,7 +312,7 @@ if [ ! -e "$ProjectDir/Taxonomy/$taxa.qza" ]; then
      # Use sklearn to classify taxonomy of the representative reads
 	qiime feature-classifier classify-sklearn \
 	     --i-classifier 16S_metagenomics/ReferenceSets/SILVA/97-V3V4-classifier.qza \
-	     --i-reads $ProjectDir/dada2/rep-seqs.qza \
+	     --i-reads "$ProjectDir/dada2/rep-seqs.qza" \
 	     --o-classification "$ProjectDir/Taxonomy/$taxa.qza" \
 		--verbose
 fi
