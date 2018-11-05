@@ -172,6 +172,9 @@ fi
 
 if ! grep -i -q "Diversity profile target" $ParFile; then echo -e "Diversity profile target	$divprotarget" >> $ParFile; fi
 
+F_primer="CCTAYGGGRBGCASCAG"
+R_primer="GGACTACNNGGGTATCTAAT"
+
 #Would be good to change this to a 'case'
 if [ $taxa == "nil" ]; then
 	if [ $divprotarget == "ITS"]; then
@@ -196,16 +199,7 @@ if [ $taxa == "nil" ]; then
 			fi
 		done
 	fi
-if ! grep -i -q "Taxonomy database" $ParFile; then echo -e "Taxonomy database	$taxa" >> $ParFile; fi
-
-	if [ ! -d "$ProjectDir/Taxonomy" ]; then
-		mkdir $ProjectDir/Taxonomy/
-		mkdir $ProjectDir/Taxonomy/$taxa
-		mkdir $ProjectDir/Taxonomy/$taxa/absolute
-		mkdir $ProjectDir/Taxonomy/$taxa/relative
-		mkdir $ProjectDir/Taxonomy/$taxa/norm
-		mkdir $ProjectDir/Taxonomy/$taxa/no1pct
-	fi
+	if ! grep -i -q "Taxonomy database" $ParFile; then echo -e "Taxonomy database	$taxa" >> $ParFile; fi
 fi
 
 Progress="$Dir/$Project.progress.txt"
@@ -219,7 +213,7 @@ if [ ! -e "$ProjectDir/Metadata/$Project.txt" ]; then
 			Switch=1
 			echo -e "${BLUE}You entered ${GREEN}$Mapping${NOCOLOUR}"
 			echo -e "${BLUE}Moving mapping file to ${GREEN}$ProjectDir/Metadata/$Project.qzv${NOCOLOUR}" | tee -a $Progress
-			# cat $Mapping > "$ProjectDir/Metadata/$Project.tsv"
+			cat $Mapping > "$ProjectDir/Metadata/$Project.metadata.tsv"
 			# Load metadata file into qiime2
 			qiime metadata tabulate \
 				--m-input-file "$Mapping" \
@@ -236,170 +230,220 @@ fi
 qiime tools import \
      --type 'SampleData[PairedEndSequencesWithQuality]' \
      --input-path ../import-list.csv \
-     --output-path original-paired-end.qza \
+     --output-path $ProjectDir/original-paired-end.qza \
      --source-format PairedEndFastqManifestPhred33
 
 # Run dada2 on paired end reads, trimming 15 bases from left and right, and truncating reads longer than 300 bp (should be none!)
-qiime dada2 denoise-paired \
-     --i-demultiplexed-seqs original-paired-end.qza \
-     --p-trim-left-f 15 \
-     --p-trim-left-r 15 \
-     --p-trunc-len-f 300 \
-     --p-trunc-len-r 300 \
-     --o-table dada2-out-table.qza \
-     --o-representative-sequences dada2-rep-seqs.qza \
-     --o-denoising-stats dada2-denoising-stats.qza
+if [ ! -e "$ProjectDir/dada2/rep-seqs.qza" ]; then
+	qiime dada2 denoise-paired \
+	     --i-demultiplexed-seqs $ProjectDir/original-paired-end.qza \
+	     --p-trim-left-f 15 \
+	     --p-trim-left-r 15 \
+	     --p-trunc-len-f 300 \
+	     --p-trunc-len-r 300 \
+	     --o-table $ProjectDir/dada2/out-table.qza \
+	     --o-representative-sequences $ProjectDir/dada2/rep-seqs.qza \
+	     --o-denoising-stats $ProjectDir/dada2/denoising-stats.qza
+fi
 
-# Have only run the below once, using representative sequences from the old script, not dada2
+if [ ! -e $ProjectDir/dada2/out-table.qzv ]; then
+	#FeatureTable and FeatureData summaries
+	qiime feature-table summarize \
+	  --i-table $ProjectDir/dada2/out-table.qza \
+	  --o-visualization $ProjectDir/dada2/out-table.qzv \
+	  --m-sample-metadata-file "$ProjectDir/Metadata/$Project.metadata.tsv"
+fi
 
-     # Load SILVA representative sequences
-qiime tools import \
-     --type 'FeatureData[Sequence]' \
-     --input-path ~/Sequences/16S_metagenomics/ReferenceSets/SILVA/rep_set/rep_set_16S_only/97/silva_132_97_16S.fna \
-     --output-path ~/Sequences/16S_metagenomics/ReferenceSets/SILVA/rep_set/rep_set_16S_only/97/silva_132_97_16S.qza
+if [ ! -e $ProjectDir/dada2/out-table.qzv ]; then
+	qiime feature-table tabulate-seqs \
+	  --i-data $ProjectDir/dada2/rep-seqs.qza \
+	  --o-visualization $ProjectDir/dada2/rep-seqs.qzv
+fi
 
-     # Load associated SILVA taxonomy
-qiime tools import \
-     --type 'FeatureData[Taxonomy]' \
-     --source-format HeaderlessTSVTaxonomyFormat \
-     --input-path ~/Sequences/16S_metagenomics/ReferenceSets/SILVA/taxonomy/16S_only/97/consensus_taxonomy_all_levels.txt \
-     --output-path ~/Sequences/16S_metagenomics/ReferenceSets/SILVA/taxonomy/16S_only/97/consensus_taxonomy_all_levels.qza
+if [ ! -e ~/Sequences/16S_metagenomics/ReferenceSets/SILVA/rep_set/rep_set_16S_only/97/silva_132_97_16S.qza ]; then
+	     # Load SILVA representative sequences
+	qiime tools import \
+	     --type 'FeatureData[Sequence]' \
+	     --input-path ~/Sequences/16S_metagenomics/ReferenceSets/SILVA/rep_set/rep_set_16S_only/97/silva_132_97_16S.fna \
+	     --output-path ~/Sequences/16S_metagenomics/ReferenceSets/SILVA/rep_set/rep_set_16S_only/97/silva_132_97_16S.qza
+fi
 
-     # Remove sections of reads outside V3-V4, better for classifier
-qiime feature-classifier extract-reads \
-     --i-sequences 16S_metagenomics/ReferenceSets/SILVA/rep_set/rep_set_16S_only/97/silva_132_97_16S.qza \
-     --p-f-primer CCTAYGGGRBGCASCAG \
-     --p-r-primer GGACTACNNGGGTATCTAAT \
-     --o-reads 16S_metagenomics/ReferenceSets/SILVA/rep_set/rep_set_16S_only/97/silva_132_97_16S_V3V4.qza
+if [ ! -e ~/Sequences/16S_metagenomics/ReferenceSets/SILVA/taxonomy/16S_only/97/consensus_taxonomy_all_levels.qza ]; then
+	     # Load associated SILVA taxonomy
+	qiime tools import \
+	     --type 'FeatureData[Taxonomy]' \
+	     --source-format HeaderlessTSVTaxonomyFormat \
+	     --input-path ~/Sequences/16S_metagenomics/ReferenceSets/SILVA/taxonomy/16S_only/97/consensus_taxonomy_all_levels.txt \
+	     --output-path ~/Sequences/16S_metagenomics/ReferenceSets/SILVA/taxonomy/16S_only/97/consensus_taxonomy_all_levels.qza
+fi
 
-     # Run naive bayes classifier on samples (training of classifier)
-qiime feature-classifier fit-classifier-naive-bayes \
-     --i-reference-reads 16S_metagenomics/ReferenceSets/SILVA/rep_set/rep_set_16S_only/97/silva_132_97_16S_V3V4.qza \
-     --i-reference-taxonomy 16S_metagenomics/ReferenceSets/SILVA/taxonomy/16S_only/97/consensus_taxonomy_all_levels.qza \
-     --o-classifier 16S_metagenomics/ReferenceSets/SILVA/97-V3V4-classifier.qza \
-     --verbose
+if [ ! -e ~/Sequencs/16S_metagenomics/ReferenceSets/SILVA/rep_set/rep_set_16S_only/97/silva_132_97_16S_V3V4.qza ]; then
+	     # Remove sections of reads outside V3-V4, better for classifier
+	qiime feature-classifier extract-reads \
+	     --i-sequences ~/Sequencs/16S_metagenomics/ReferenceSets/SILVA/rep_set/rep_set_16S_only/97/silva_132_97_16S.qza \
+	     --p-f-primer $F_primer \
+	     --p-r-primer $R_primer \
+	     --o-reads ~/Sequencs/16S_metagenomics/ReferenceSets/SILVA/rep_set/rep_set_16S_only/97/silva_132_97_16S_V3V4.qza \
+		--verbose
+fi
 
+if [ ! -e ~/Sequencs/16S_metagenomics/ReferenceSets/SILVA/97-V3V4-classifier.qza ]; then
+	     # Run naive bayes classifier on samples (training of classifier)
+	qiime feature-classifier fit-classifier-naive-bayes \
+	     --i-reference-reads ~/Sequencs/16S_metagenomics/ReferenceSets/SILVA/rep_set/rep_set_16S_only/97/silva_132_97_16S_V3V4.qza \
+	     --i-reference-taxonomy ~/Sequencs/16S_metagenomics/ReferenceSets/SILVA/taxonomy/16S_only/97/consensus_taxonomy_all_levels.qza \
+	     --o-classifier ~/Sequencs/16S_metagenomics/ReferenceSets/SILVA/97-V3V4-classifier.qza \
+	     --verbose
+fi
+
+if [ ! -d "$ProjectDir/Taxonomy" ]; then
+	mkdir $ProjectDir/Taxonomy/
+fi
+
+if [ ! -e "$ProjectDir/Taxonomy/$taxa.qza" ]; then
      # Use sklearn to classify taxonomy of the representative reads
-qiime feature-classifier classify-sklearn \
-     --i-classifier 16S_metagenomics/ReferenceSets/SILVA/97-V3V4-classifier.qza \
-     --i-reads Collaboration/NataliKrekler/First_round_reads/OTUs/rep-seqs.qza \
-     --o-classification Collaboration/NataliKrekler/First_round_reads/taxonomy.qza
+	qiime feature-classifier classify-sklearn \
+	     --i-classifier 16S_metagenomics/ReferenceSets/SILVA/97-V3V4-classifier.qza \
+	     --i-reads $ProjectDir/dada2/rep-seqs.qza \
+	     --o-classification "$ProjectDir/Taxonomy/$taxa.qza" \
+		--verbose
+fi
 
-     # Can't remember what this does...generates an output of the taxa to view?
-qiime metadata tabulate \
-     --m-input-file Collaboration/NataliKrekler/First_round_reads/taxonomy.qza \
-     --o-visualization Collaboration/NataliKrekler/First_round_reads/taxonomy.qva
+# Generates an output of the taxa to view in browser
+if [ ! -e "$ProjectDir/Taxonomy/$taxa.qzv" ]; then
+	qiime metadata tabulate \
+		--m-input-file "$ProjectDir/Taxonomy/$taxa.qza" \
+		--o-visualization "$ProjectDir/Taxonomy/$taxa.qzv" \
+		--verbose
+fi
 
-##### COPIED FROM TUTORIALS, HAVEN'T RUN ANY OF THESE
-
-#FeatureTable and FeatureData summaries
-qiime feature-table summarize \
-  --i-table table.qza \
-  --o-visualization table.qzv \
-  --m-sample-metadata-file sample-metadata.tsv
-qiime feature-table tabulate-seqs \
-  --i-data rep-seqs.qza \
-  --o-visualization rep-seqs.qzv
+# Generates bar charts of taxa
+if [ ! -e "$ProjectDir/Taxonomy/$taxa-bar-plots.qzv" ]; then
+	qiime taxa barplot \
+		--i-table "$ProjectDir/dada2/out-table.qza" \
+		--i-taxonomy "$ProjectDir/Taxonomy/$taxa.qza" \
+		--m-metadata-file "$ProjectDir/Metadata/$Project.metadata.tsv" \
+		--o-visualization "$ProjectDir/Taxonomy/$taxa-bar-plots.qzv"
+fi
 
 
-# Taxonomic analysis
-  qiime feature-classifier classify-sklearn \
-    --i-classifier gg-13-8-99-515-806-nb-classifier.qza \
-    --i-reads rep-seqs.qza \
-    --o-classification taxonomy.qza
 
-  qiime metadata tabulate \
-    --m-input-file taxonomy.qza \
-    --o-visualization taxonomy.qzv
-
-  qiime taxa barplot \
-  --i-table table.qza \
-  --i-taxonomy taxonomy.qza \
-  --m-metadata-file sample-metadata.tsv \
-  --o-visualization taxa-bar-plots.qzv
+##########################################
 
 # Differential abundance testing with ANCOM
 
-qiime composition add-pseudocount \
-  --i-table gut-table.qza \
-  --o-composition-table comp-gut-table.qza
+if [ ! -d "$ProjectDir/ANCOM" ]; then
+	mkdir "$ProjectDir/ANCOM"
+fi
 
-qiime composition ancom \
-    --i-table comp-gut-table.qza \
-    --m-metadata-file sample-metadata.tsv \
-    --m-metadata-column Subject \
-    --o-visualization ancom-Subject.qzv
+# Filter a Category by a particular variable, commented out for now
 
+# if [ ! -e "$ProjectDir/ANCOM/$filter-table.qza" ]
+# 	qiime feature-table filter-samples \
+# 		--i-table "$ProjectDir/dada2/out-table.qza" \
+# 		--m-metadata-file "$ProjectDir/Metadata/$Project.metadata.tsv" \
+# 		--p-where "$Category='$filter'" \
+# 		--o-filtered-table "$ProjectDir/ANCOM/$filter-table.qza"
+# fi
 
-# Collapse at various levels
-qiime taxa collapse \
-  --i-table gut-table.qza \
-  --i-taxonomy taxonomy.qza \
-  --p-level 6 \
-  --o-collapsed-table gut-table-l6.qza
+if [ ! -e "$ProjectDir/ANCOM/pseudo-table.qza" ]; then
+	qiime composition add-pseudocount \
+		--i-table "$ProjectDir/dada2/out-table.qza" \
+		--o-composition-table "$ProjectDir/ANCOM/$taxa.pseudo-table.qza"
+fi
 
-     # Add pseudocount for expression/abundance comparsion (removes zeros)
-qiime composition add-pseudocount \
-  --i-table gut-table-l6.qza \
-  --o-composition-table comp-gut-table-l6.qza
+if [ ! -e "$ProjectDir/ANCOM/ancom-$Category.qzv" ]; then
+	qiime composition ancom \
+		--i-table "$ProjectDir/ANCOM/pseudo-table.qza" \
+		--m-metadata-file "$ProjectDir/Metadata/$Project.metadata.tsv" \
+		--m-metadata-column $Category \
+		--o-visualization "$ProjectDir/ANCOM/ancom-$Category.qzv"
+fi
 
-     # Composition comparison at specified level with ANCOM
-qiime composition ancom \
-  --i-table comp-gut-table-l6.qza \
-  --m-metadata-file sample-metadata.tsv \
-  --m-metadata-column Subject \
-  --o-visualization l6-ancom-Subject.qzv
+# Collapse at various levels and analyse with ANCOM
+Count="6"
+while [ $Count -gt "0" ]; do
+	if [ ! -e "$ProjectDir/Taxonomy/$taxa.L$Count.qza" ]; then
+		qiime taxa collapse \
+			--i-table "$ProjectDir/dada2/out-table.qza" \
+			--i-taxonomy "$ProjectDir/Taxonomy/$taxa.qza" \
+			--p-level $Count \
+			--o-collapsed-table "$ProjectDir/Taxonomy/$taxa.L$Count.qza"
+	fi
+
+	     # Add pseudocount for expression/abundance comparsion (removes zeros)
+	if [ ! -e "$ProjectDir/ANCOM/$taxa.L$Count.pseudo-table.qza" ]; then
+		qiime composition add-pseudocount \
+			--i-table "$ProjectDir/Taxonomy/$taxa.L$Count.qza" \
+			--o-composition-table "$ProjectDir/ANCOM/$taxa.L$Count.pseudo-table.qza"
+	fi
+
+	# Composition comparison at specified level with ANCOM
+	if [ ! -e "$ProjectDir/ANCOM/ancom-L$Count-$Category.qzv" ]; then
+		qiime composition ancom \
+			--i-table "$ProjectDir/ANCOM/$taxa.L$Count.pseudo-table.qza" \
+			--m-metadata-file "$ProjectDir/Metadata/$Project.metadata.tsv" \
+			--m-metadata-column $Category \
+			--o-visualization "$ProjectDir/ANCOM/ancom-L$Count-$Category.qzv"
+	fi
+	Count=$((Count - 1))
+done
+
 
 #Generate a tree for phylogenetic diversity analyses¶
+
+mkdir $ProjectDir/Phylogeny
+
 qiime phylogeny align-to-tree-mafft-fasttree \
---i-sequences rep-seqs.qza \
---o-alignment aligned-rep-seqs.qza \
---o-masked-alignment masked-aligned-rep-seqs.qza \
---o-tree unrooted-tree.qza \
---o-rooted-tree rooted-tree.qza
+	--i-sequences "$ProjectDir/dada2/rep-seqs.qza" \
+	--o-alignment "$ProjectDir/Phylogeny/aligned-rep-seqs.qza" \
+	--o-masked-alignment "$ProjectDir/Phylogeny/masked-aligned-rep-seqs.qza" \
+	--o-tree "$ProjectDir/Phylogeny/unrooted-tree.qza" \
+	--o-rooted-tree "$ProjectDir/Phylogeny/rooted-tree.qza"
 
 #Alpha and beta diversity analysis
 qiime diversity core-metrics-phylogenetic \
   --i-phylogeny rooted-tree.qza \
   --i-table table.qza \
-  --p-sampling-depth 1109 \  ### change this
+  --p-sampling-depth 30000 \  ### change this
   --m-metadata-file sample-metadata.tsv \
   --output-dir core-metrics-results
 
 
 
 ## Output artifacts:
+if [ ! -e "$ProjectDir/Metadata/$Project.alpha-metrics.txt" ]; then
+	cat << EOT >> "$ProjectDir/Metadata/$Project.alpha-metrics.txt"
+evenness_vector.qza
+faith_pd_vector.qza
+shannon_vector.qza
+rarefied_table.qza
+observed_otus_vector.qza
+EOT
+sed -i 's/\.qza//g' "$ProjectDir/Metadata/$Project.alpha-metrics.txt"
+fi
 
-    core-metrics-results/faith_pd_vector.qza
-    core-metrics-results/unweighted_unifrac_distance_matrix.qza
-    core-metrics-results/bray_curtis_pcoa_results.qza
-    core-metrics-results/shannon_vector.qza
-    core-metrics-results/rarefied_table.qza
-    core-metrics-results/weighted_unifrac_distance_matrix.qza
-    core-metrics-results/jaccard_pcoa_results.qza
-    core-metrics-results/observed_otus_vector.qza
-    core-metrics-results/weighted_unifrac_pcoa_results.qza
-    core-metrics-results/jaccard_distance_matrix.qza
-    core-metrics-results/evenness_vector.qza
-    core-metrics-results/bray_curtis_distance_matrix.qza
-    core-metrics-results/unweighted_unifrac_pcoa_results.qza
 
-## Output visualizations:
+if [ ! -e "$ProjectDir/Metadata/$Project.beta-metrics.txt" ]; then
+	cat << EOT >> "$ProjectDir/Metadata/$Project.beta-metrics.txt"
+bray_curtis_distance_matrix.qza
+bray_curtis_pcoa_results.qza
+unweighted_unifrac_distance_matrix.qza
+unweighted_unifrac_pcoa_results.qza
+weighted_unifrac_distance_matrix.qza
+weighted_unifrac_pcoa_results.qza
+jaccard_distance_matrix.qza
+jaccard_pcoa_results.qza
+EOT
+sed -i 's/\.qza//g' "$ProjectDir/Metadata/$Project.beta-metrics.txt"
+fi
 
-     core-metrics-results/unweighted_unifrac_emperor.qzv
-     core-metrics-results/jaccard_emperor.qzv
-     core-metrics-results/bray_curtis_emperor.qzv
-     core-metrics-results/weighted_unifrac_emperor.qzv
 
+while read i; do
      qiime diversity alpha-group-significance \
       --i-alpha-diversity core-metrics-results/faith_pd_vector.qza \
       --m-metadata-file sample-metadata.tsv \
       --o-visualization core-metrics-results/faith-pd-group-significance.qzv
-
-     qiime diversity alpha-group-significance \
-      --i-alpha-diversity core-metrics-results/evenness_vector.qza \
-      --m-metadata-file sample-metadata.tsv \
-      --o-visualization core-metrics-results/evenness-group-significance.qzv
 
 
       core-metrics-results/faith-pd-group-significance.qzv
@@ -421,3 +465,6 @@ qiime diversity core-metrics-phylogenetic \
 
      core-metrics-results/unweighted-unifrac-body-site-significance.qzv
      core-metrics-results/unweighted-unifrac-subject-group-significance.qzv
+
+
+source deactivate
