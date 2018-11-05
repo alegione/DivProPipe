@@ -547,8 +547,8 @@ if [ ! -e "$classifier_fna_dir/${classifier_fna}_${F_primerName}-${R_primerName}
 	     # Remove sections of reads outside V3-V4, better for classifier
 	qiime feature-classifier extract-reads \
 	     --i-sequences "$classifier_fna_dir/$classifier_fna.qza" \
-	     --p-f-primer $F_primer \
-	     --p-r-primer $R_primer \
+	     --p-f-primer "$F_primer" \
+	     --p-r-primer "$R_primer" \
 	     --o-reads "$classifier_fna_dir/${classifier_fna}_${F_primerName}-${R_primerName}.qza" \
 		--verbose
 fi
@@ -686,7 +686,7 @@ if [ ! -d "$ProjectDir/DiversityMetrics" ]; then
 	mkdir "$ProjectDir/DiversityMetrics"
 fi
 
-if [ $(ls "ProjectDir/DiversityMetrics/" | wc -l) -lt "17" ]; then
+if [ $(ls "$ProjectDir/DiversityMetrics/" | wc -l) -lt "17" ]; then
 	echo -e "$(date)" | tee -a $Progress
 	echo -e "Producing diversity metrics" | tee -a $Progress
 	qiime diversity core-metrics-phylogenetic \
@@ -703,7 +703,6 @@ if [ ! -e "$ProjectDir/Metadata/$Project.alpha-metrics.txt" ]; then
 evenness_vector
 faith_pd_vector
 shannon_vector
-rarefied_table
 observed_otus_vector
 EOT
 fi
@@ -712,21 +711,17 @@ fi
 if [ ! -e "$ProjectDir/Metadata/$Project.beta-metrics.txt" ]; then
 	cat << EOT >> "$ProjectDir/Metadata/$Project.beta-metrics.txt"
 bray_curtis_distance_matrix
-bray_curtis_pcoa_results
 unweighted_unifrac_distance_matrix
-unweighted_unifrac_pcoa_results
 weighted_unifrac_distance_matrix
-weighted_unifrac_pcoa_results
 jaccard_distance_matrix
-jaccard_pcoa_results
 EOT
 fi
 
 
 while read i; do
-	echo -e "$(date)" | tee -a $Progress
-	echo -e "Producing $i visualization" | tee -a $Progress
 	if [ ! -e "$ProjectDir/DiversityMetrics/$i.qzv" ]; then
+		echo -e "$(date)" | tee -a $Progress
+		echo -e "Producing $i visualization" | tee -a $Progress
 		qiime diversity alpha-group-significance \
 			--i-alpha-diversity "$ProjectDir/DiversityMetrics/$i.qza" \
 			--m-metadata-file "$ProjectDir/Metadata/$Project.metadata.tsv" \
@@ -734,18 +729,21 @@ while read i; do
 	fi
 done < "$ProjectDir/Metadata/$Project.alpha-metrics.txt"
 
-while read i; do
-	if [ ! -e "$ProjectDir/DiversityMetrics/$i.qzv" ]; then
-		echo -e "$(date)" | tee -a $Progress
-		echo -e "Producing $i visualization" | tee -a $Progress
-		qiime diversity beta-group-significance \
-			--i-distance-matrix "$ProjectDir/DiversityMetrics/$i.qza" \
-			--m-metadata-file "$ProjectDir/Metadata/$Project.metadata.tsv" \
-			--m-metadata-column $Category \
-			--o-visualization "$ProjectDir/DiversityMetrics/$i.qzv" \
-			--p-pairwise
-	fi
-done < "$ProjectDir/Metadata/$Project.beta-metrics.txt"
-
+while read Category; do
+	while read i; do
+		if [ ! -d "$ProjectDir/DiversityMetrics/$Category.$i.qzv" ]; then
+			echo -e "$(date)" | tee -a $Progress
+			echo -e "Producing $i visualization" | tee -a $Progress
+			qiime diversity beta-group-significance \
+				--i-distance-matrix "$ProjectDir/DiversityMetrics/$i.qza" \
+				--m-metadata-file "$ProjectDir/Metadata/$Project.metadata.tsv" \
+				--m-metadata-column "$Category" \
+				--p-pairwise \
+				--p-permutations 999 \
+				--o-visualization "$ProjectDir/DiversityMetrics/$Category.$i.qzv" \
+				--verbose
+		fi
+	done < "$ProjectDir/Metadata/$Project.beta-metrics.txt"
+done < "$ProjectDir/Metadata/Groups.txt"
 
 source deactivate
