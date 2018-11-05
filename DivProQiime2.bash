@@ -146,6 +146,9 @@ if [ $ReadDir == "nil" ]; then
 			     echo "$(basename $i | cut -f 1 -d '-'),$ReadDir/$i,forward" >> "$ProjectDir/Metadata/import-list.csv"
 			done
 
+			SampleCount=$(wc -l < "$ProjectDir/Metadata/import-list.csv") #counts (wc) the number of lines (-l) in an input file (<). Putting the command within $() allows you to save the value to a variable, which we can then print to the terminal
+			echo -e "${BLUE}Samples detected in directory = ${GREEN}$SampleCount${NOCOLOUR}"
+
 			# Generate list of reverse reads (assumes reads end in R2.fastq.gz)
 			ls $ReadDir/*R2*fastq* | while read i; do
 			     echo "$(basename $i | cut -f 1 -d '-'),$ReadDir/$i,reverse" >> "$ProjectDir/Metadata/import-list.csv"
@@ -335,14 +338,24 @@ if [ ! -e "$ProjectDir/Metadata/$Project.tabulated-sample-metadata.qzv" ]; then
 		if [ -e $Mapping ]; then
 			Switch="1"
 			echo -e "${BLUE}You entered ${GREEN}$Mapping${NOCOLOUR}" | tee -a $Progress
-			echo -e "${BLUE}Moving mapping file to ${GREEN}$ProjectDir/Metadata/$Project.(tsv|qzv)${NOCOLOUR}" | tee -a $Progress
-			cat $Mapping > "$ProjectDir/Metadata/$Project.metadata.tsv"
-			# Load metadata file into qiime2
-			qiime metadata tabulate \
-				--m-input-file "$Mapping" \
-				--o-visualization "$ProjectDir/Metadata/$Project.tabulated-sample-metadata.qzv"
-			MapHead="$ProjectDir/Metadata/$Project.head.tsv"
-			head -2 $Mapping > $MapHead
+			MappingCount=$(grep -c '' $Mapping)
+			MappingCount=$((MappingCount-2))
+			echo -e "${BLUE}Samples detected in mapping file = ${GREEN}$MappingCount${NOCOLOUR}"
+			sleep 1s
+			if [ $SampleCount -ne $MappingCount ]; then
+				echo -e "${RED}The number of samples in the mapping file ($MappingCount) does not match the number detected in the read directory ($SampleCount), please rectify to continue${NOCOLOUR}"
+			else
+				echo -e "${BLUE}Moving mapping file to ${GREEN}$ProjectDir/Metadata/$Project.(tsv|qzv)${NOCOLOUR}" | tee -a $Progress
+				cat $Mapping > "$ProjectDir/Metadata/$Project.metadata.tsv"
+				# Load metadata file into qiime2
+				qiime metadata tabulate \
+					--m-input-file "$Mapping" \
+					--o-visualization "$ProjectDir/Metadata/$Project.tabulated-sample-metadata.qzv"
+
+				Mapping="$ProjectDir/Metadata/$Project.metadata.tsv"
+				MapHead="$ProjectDir/Metadata/$Project.head.tsv"
+				head -2 $Mapping > $MapHead
+			fi
 		else
 			echo -e "${RED}File does not exist: ${GREEN}$Mapping${NOCOLOUR}"
 		fi
@@ -350,6 +363,61 @@ if [ ! -e "$ProjectDir/Metadata/$Project.tabulated-sample-metadata.qzv" ]; then
 fi
 
 ### ADD CATEGORIES FOR TESTING HERE
+
+echo -e "${BLUE}The first two rows of your mapping file look like this:${YELLOW}"
+head -2 "$ProjectDir/Metadata/$Project.txt"
+sleep 1s
+
+if [ ! -e "$ProjectDir/Metadata/Groups.txt" ]; then
+	echo -e "${BLUE}How many group/treatment variables would you like to compare (can only be 'categorical' variables)${NOCOLOUR}"
+	read -e TreatmentNo
+	Count=0
+	while [ "$Count" -ne "$TreatmentNo" ]; do
+		echo -e "${BLUE}Please name treatment/group $((Count+1)) exactly as it appears in the mapping file${NOCOLOUR}"
+		read Treatment
+		if grep -q $Treatment $MapHead; then
+			echo -e "$Treatment" >> "$ProjectDir/Metadata/Groups.txt"
+			echo -e "$Treatment was input as a treatment/group" | tee -a $Progress
+			Count=$((Count+1))
+		else
+			echo -e "${RED}Error: That treatment group does not appear in your mapping file, please try again${YELLOW}"
+			head -2 "$ProjectDir/Metadata/$Project.txt"
+			echo -e "${NOCOLOUR}"
+		fi
+	done
+	echo -e "${BLUE}Your selected treatments are:${GREEN}"
+	cat "$ProjectDir/Metadata/Groups.txt"
+else
+	echo -e "${BLUE}Treatment file detected, comparison groups are: ${GREEN}"
+	cat "$ProjectDir/Metadata/Groups.txt"
+	Switch="0"
+	while [ $Switch -eq "0" ]; do
+		echo -e "${BLUE}Would you like to add another treatment group (Y/N)? ${NOCOLOUR}"
+		read -e -N 1 yesno
+		yesno=$(echo -e "$yesno" | tr '[:upper:]' '[:lower:]')
+		if [ $yesno = "y" ]; then
+			echo -e "${BLUE}How many group/treatment variables would you like to compare (can only be 'categorical' variables)${NOCOLOUR}"
+			read -e TreatmentNo
+			Count=0
+			while [ "$Count" -ne "$TreatmentNo" ]; do
+				echo -e "${BLUE}Please name treatment/group $((Count+1)) exactly as it appears in the mapping file${NOCOLOUR}"
+				read Treatment
+				if grep -q $Treatment $MapHead; then
+					echo -e "$Treatment" >> "$ProjectDir/Metadata/Groups.txt"
+					echo -e "$Treatment was input as a treatment/group" | tee -a $Progress
+					Count=$((Count+1))
+				else
+					echo -e "${RED}Error: That treatment group does not appear in your mapping file, please try again${YELLOW}"
+					head -2 "$ProjectDir/Metadata/$Project.txt"
+					echo -e "${NOCOLOUR}"
+				fi
+			done
+		fi
+		echo -e "${BLUE}Your selected treatments are:${GREEN}"
+		cat "$ProjectDir/Metadata/Groups.txt"
+		Switch="1"
+		done
+fi
 
 
 #Import reads to qiime format from 'import-list' generated with previous code
@@ -484,48 +552,36 @@ fi
 # 		--o-filtered-table "$ProjectDir/ANCOM/$filter-table.qza"
 # fi
 
-if [ ! -e "$ProjectDir/ANCOM/pseudo-table.qza" ]; then
-	qiime composition add-pseudocount \
-		--i-table "$ProjectDir/dada2/out-table.qza" \
-		--o-composition-table "$ProjectDir/ANCOM/$divprotarget.pseudo-table.qza"
-fi
-
-if [ ! -e "$ProjectDir/ANCOM/ancom-$Category.qzv" ]; then
-	qiime composition ancom \
-		--i-table "$ProjectDir/ANCOM/pseudo-table.qza" \
-		--m-metadata-file "$ProjectDir/Metadata/$Project.metadata.tsv" \
-		--m-metadata-column $Category \
-		--o-visualization "$ProjectDir/ANCOM/ancom-$Category.qzv"
-fi
-
 # Collapse at various levels and analyse with ANCOM
-Count="6"
-while [ $Count -gt "0" ]; do
-	if [ ! -e "$ProjectDir/Taxonomy/$divprotarget.L$Count.qza" ]; then
-		qiime taxa collapse \
-			--i-table "$ProjectDir/dada2/out-table.qza" \
-			--i-taxonomy "$ProjectDir/Taxonomy/$divprotarget.qza" \
-			--p-level $Count \
-			--o-collapsed-table "$ProjectDir/Taxonomy/$divprotarget.L$Count.qza"
-	fi
+while read Category; do
+	Count="6"
+	while [ $Count -gt "0" ]; do
+		if [ ! -e "$ProjectDir/Taxonomy/$divprotarget.L$Count.qza" ]; then
+			qiime taxa collapse \
+				--i-table "$ProjectDir/dada2/out-table.qza" \
+				--i-taxonomy "$ProjectDir/Taxonomy/$divprotarget.qza" \
+				--p-level $Count \
+				--o-collapsed-table "$ProjectDir/Taxonomy/$divprotarget.L$Count.qza"
+		fi
 
-	     # Add pseudocount for expression/abundance comparsion (removes zeros)
-	if [ ! -e "$ProjectDir/ANCOM/$divprotarget.L$Count.pseudo-table.qza" ]; then
-		qiime composition add-pseudocount \
-			--i-table "$ProjectDir/Taxonomy/$divprotarget.L$Count.qza" \
-			--o-composition-table "$ProjectDir/ANCOM/$divprotarget.L$Count.pseudo-table.qza"
-	fi
+		     # Add pseudocount for expression/abundance comparsion (removes zeros)
+		if [ ! -e "$ProjectDir/ANCOM/$divprotarget.L$Count.pseudo-table.qza" ]; then
+			qiime composition add-pseudocount \
+				--i-table "$ProjectDir/Taxonomy/$divprotarget.L$Count.qza" \
+				--o-composition-table "$ProjectDir/ANCOM/$divprotarget.L$Count.pseudo-table.qza"
+		fi
 
-	# Composition comparison at specified level with ANCOM
-	if [ ! -e "$ProjectDir/ANCOM/ancom-L$Count-$Category.qzv" ]; then
-		qiime composition ancom \
-			--i-table "$ProjectDir/ANCOM/$divprotarget.L$Count.pseudo-table.qza" \
-			--m-metadata-file "$ProjectDir/Metadata/$Project.metadata.tsv" \
-			--m-metadata-column $Category \
-			--o-visualization "$ProjectDir/ANCOM/ancom-L$Count-$Category.qzv"
-	fi
-	Count=$((Count - 1))
-done
+		# Composition comparison at specified level with ANCOM
+		if [ ! -e "$ProjectDir/ANCOM/ancom-L$Count-$Category.qzv" ]; then
+			qiime composition ancom \
+				--i-table "$ProjectDir/ANCOM/$divprotarget.L$Count.pseudo-table.qza" \
+				--m-metadata-file "$ProjectDir/Metadata/$Project.metadata.tsv" \
+				--m-metadata-column $Category \
+				--o-visualization "$ProjectDir/ANCOM/ancom-L$Count-$Category.qzv"
+		fi
+		Count=$((Count-1))
+	done
+done < "$ProjectDir/Metadata/Groups.txt"
 
 
 #Generate a tree for phylogenetic diversity analyses¶
