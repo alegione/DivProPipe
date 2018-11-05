@@ -81,6 +81,10 @@ else
 	R_primer="nil"
 	R_Position="nil"
 	ReadLength="nil"
+	classifier_fna_dir="nil"
+	classifier_fna="nil"
+	classifier_taxa_dir="nil"
+	classifier_taxa="nil"
 fi
 
 # If running for the first time ask user the name of the project for
