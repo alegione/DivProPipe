@@ -598,6 +598,15 @@ if [ ! -e "$ProjectDir/Taxonomy/$divprotarget-bar-plots.qzv" ]; then
 		--o-visualization "$ProjectDir/Taxonomy/$divprotarget-bar-plots.qzv"
 fi
 
+# Convoluted way of getting the median sample number from the overview.html file...first have to extract the file
+# grep -i -A 1 "Median Frequency" data/overview.html | head -2 | tail -1 | sed 's/<\/..>//g' | sed 's/<..>//g' | sed 's/\ //g' | sed 's/,//g' | sed 's/\..*//g'
+# could then do a 'while' loop to pick the next highest number?? eg if the median is 18000 and a sample has 19484, this would become the sampling depth
+# can pull the sample counts from the data/sample-frequency-detail.csv
+# cat data/sample-frequency-detail.csv | cut -f2 -d "," | sed 's/\..*//g' | while read i; do if [ "$i" -lt "$(grep -i -A 1 "Median Frequency" data/overview.html | head -2 | tail -1 | sed 's/<\/..>//g' | sed 's/<..>//g' | sed 's/\ //g' | sed 's/,//g' | sed 's/\..*//g')" ]; then echo $j; break; else j=$i; fi; done
+
+# The above works, but I think a standard deviation from the mean would be more suitable, or something similar (as the results may not be normal)
+
+
 ################################################################################
 
 # Differential abundance testing with ANCOM
