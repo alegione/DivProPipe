@@ -17,13 +17,6 @@ WIDTH=`echo ${LINE} | awk '{ print $8 }'`
 HEIGHT=`echo ${LINE} | awk '{ print $10 }' | awk -F"," '{ print $1 }'`
 echo -e "\e[4;$HEIGHT;${WIDTH}t"
 
-
-#Start qiime2 environment in conda
-source activate qiime2
-
-#Make tab completion available
-source tab-qiime
-
 # Look for a 'Parameters' text file in a 'metadata' folder that stores the user input
 # If no file is present, or the variables are present in the file, set the variables to 'nil'
 if [ -e "$1/Metadata/Parameters.txt" ]; then
@@ -31,8 +24,10 @@ if [ -e "$1/Metadata/Parameters.txt" ]; then
 	ParFile="$1/Metadata/Parameters.txt"
 	Meta="$1/Metadata"
 
-	if grep -i -q "User" $ParFile; then Dir=$(grep -i "User" $ParFile | cut -f2); echo -e "${GREEN}User: $Dir${NOCOLOUR}";else Dir="nil"; fi
-	if grep -i -q "Project" $ParFile; then Project=$(grep -i "Project" $ParFile | cut -f2); echo -e "${GREEN}Project directory: $Project${NOCOLOUR}";else Project="nil"; fi
+	if grep -i -q "Environment" $ParFile; then environment=$(grep -i "Environment" $ParFile | cut -f2); echo -e "${GREEN}Environment: $environment${NOCOLOUR}";else environment="nil"; fi
+
+	if grep -i -q "Project folder" $ParFile; then Dir=$(grep -i "Project folder" $ParFile | cut -f2); echo -e "${GREEN}Project folder: $Dir${NOCOLOUR}";else Dir="nil"; fi
+	if grep -i -q "Project name" $ParFile; then Project=$(grep -i "Project name" $ParFile | cut -f2); echo -e "${GREEN}Project name: $Project${NOCOLOUR}";else Project="nil"; fi
 	if grep -i -q "Original reads" $ParFile; then ReadDir=$(grep -i "Original reads" $ParFile | cut -f2); echo -e "${GREEN}Reads directory: $ReadDir${NOCOLOUR}";else ReadDir="nil";fi
 	if grep -i -q "Diversity profile target" $ParFile; then divprotarget=$(grep -i "Diversity profile target" $ParFile | cut -f2);echo -e "${GREEN}Diversity profile target: $divprotarget${NOCOLOUR}";else divprotarget="nil";fi
 
@@ -52,7 +47,7 @@ if [ -e "$1/Metadata/Parameters.txt" ]; then
 	if grep -i -q "R_primer name" $ParFile; then R_primerName=$(grep -i "R_primer name" $ParFile | cut -f2); echo -e "${GREEN}Reverse primer name: $R_primerName${NOCOLOUR}"; else R_primerName="nil";fi
 	if grep -i -q "Reverse primer" $ParFile; then R_primer=$(grep -i "Reverse primer" $ParFile | cut -f2); echo -e "${GREEN}Reverse primer sequence: $R_primer${NOCOLOUR}"; else R_primer="nil";fi
 	if grep -i -q "R_primer start" $ParFile; then R_Position=$(grep -i "R_primer start" $ParFile | cut -f2); echo -e "${GREEN}Reverse primer name: $R_Position${NOCOLOUR}"; else R_Position="nil";fi
-	if grep -i -q "ReadLength" $ParFile; then ReadLength=$(grep -i "ReadLength" $ParFile | cut -f2); echo -e "${GREEN}Desired singe read length: $ReadLength${NOCOLOUR}"; else ReadLength="nil";fi
+	if grep -i -q "Read Length" $ParFile; then ReadLength=$(grep -i "Read Length" $ParFile | cut -f2); echo -e "${GREEN}Desired singe read length: $ReadLength${NOCOLOUR}"; else ReadLength="nil";fi
 
 
 	if grep -i -q "Taxonomy FNA directory" $ParFile; then classifier_fna_dir=$(grep -i "Taxonomy FNA directory" $ParFile | cut -f2); echo -e "${GREEN}Taxonomy FNA directory: $classifier_fna_dir${NOCOLOUR}"; else classifier_fna_dir="nil";fi
@@ -61,6 +56,7 @@ if [ -e "$1/Metadata/Parameters.txt" ]; then
 	if grep -i -q "Taxonomy taxa name file" $ParFile; then classifier_taxa=$(grep -i "Taxonomy taxa name file" $ParFile | cut -f2); echo -e "${GREEN}Taxonomy taxa name file: $classifier_taxa${NOCOLOUR}"; else classifier_taxa="nil";fi
 	sleep 1
 else
+	environment="nil"
 	Dir="nil"
 	Project="nil"
 	ReadDir="nil"
@@ -87,13 +83,33 @@ else
 	classifier_taxa="nil"
 fi
 
+if [ $environment == "nil" ]; then
+	echo -e "${BLUE}Please enter the name of your qiime2 environment${NOCOLOUR}"
+	if [ -d ~/miniconda3/envs ]; then
+		if  [ $(ls ~/miniconda3/envs/ | wc -l) -eq "1" ]; then
+			environment=$(basename ~/miniconda3/envs/*)
+			echo -e "The only conda environment present is: $environment"
+		else
+			echo -e "Possible options are:"
+			echo -e "$(ls ~/miniconda3/envs/)"
+			read -e environment
+		fi
+	else
+		read -e environment
+	fi
+
+fi
+
+
+
+
 # If running for the first time ask user the name of the project for
 # file and directory naming purposes
 if [ $Dir == "nil" ]; then
 	Switch="0"
 	while [ "$Switch" -eq "0" ]; do
 		echo -e "${BLUE}Please the directory where you keep your projects${YELLOW}(eg: Documents/YOURNAME):${NOCOLOUR}"
-		read -e Dir
+		read -e Dir #need to strip last / from autocomplete
 		if [ ! -d $Dir ]; then
 			echo -e "${RED}No directory of that name exists${NOCOLOUR}"
 			echo -e "Would you like to create it? (Y/N)${NOCOLOUR}"
@@ -115,31 +131,45 @@ if [ $Project == "nil" ]; then
 	read -e Project
 fi
 
-ProjectDir="${Dir}/${Project}" #the location to store the project files
-
-if [ ! -e $ParFile ]; then
-	ParFile="$ProjectDir/Metadata/Parameters.txt"
-fi
-
+#the location to store the project files
+ProjectDir="${Dir}/${Project}"
 
 #have to make the metadata file high up in the list!
-if [ ! -d "$ProjectDir" ]; then #if the project directory doesn't exist, create all appropriate folders and sub-folders
+#if the project directory doesn't exist, create all appropriate folders and sub-folders
+if [ ! -d "$ProjectDir" ]; then
+	echo -e "Creating directory: $Project"
 	mkdir $ProjectDir
-	mkdir $ProjectDir/Results_Summary
-	mkdir $ProjectDir/Metadata
+fi
+
+if [ ! -d "$ProjectDir/Metadata" ]; then
+	echo -e "Creating Metadata subdirectory"
+	mkdir "$ProjectDir/Metadata"
+fi
+
+if [ ! -d "$ProjectDir/Results_Summary" ]; then
+	echo -e "Creating Results subdirectory"
+	mkdir "$ProjectDir/Results_Summary"
+fi
+
+if [ -z $ParFile ] || [ ! -e $ParFile ]; then
+	echo -e "Writing Parameters file"
+	ParFile="$ProjectDir/Metadata/Parameters.txt"
+	echo -e "Project folder	$Dir" >> $ParFile
+	echo -e "Project name	$Project" >> $ParFile
+	echo -e "Environment	$environment" >> $ParFile
 fi
 
 if ! grep -i -q "Project folder" $ParFile; then echo -e "Project folder	$Dir" >> $ParFile; fi
 if ! grep -i -q "Project name" $ParFile; then echo -e "Project name	$Project" >> $ParFile; fi
-
+if ! grep -i -q "Environment" $ParFile; then echo -e "Environment	$environment" >> $ParFile; fi
 
 if [ $ReadDir == "nil" ]; then
-	Switch=0
+	Switch="0"
 	while [ "$Switch" -eq "0" ]; do
 		echo -e "${BLUE}Please enter the file location of your reads ${RED}(your files MUST be paired end reads ending in a #.fastq):${NOCOLOUR}"
 		read -e ReadDir
 		if [ -d $ReadDir ]; then
-			Switch=1
+			Switch="1"
 			echo -e "${BLUE}You entered: ${GREEN}$ReadDir${NOCOLOUR}"
 			echo -e "Original reads	$ReadDir" >> $ParFile
 			# create a list of the sequences to use with appropriate headings for QIIME2
@@ -147,15 +177,12 @@ if [ $ReadDir == "nil" ]; then
 
 			# Generate list of forward reads (assumes reads end in R1.fastq.gz)
 			ls $ReadDir/*R1*fastq* | while read i; do
-			     echo "$(basename $i | cut -f 1 -d '-'),$ReadDir/$i,forward" >> "$ProjectDir/Metadata/import-list.csv"
+			     echo "$(basename $i | cut -f 1 -d '-'),$i,forward" >> "$ProjectDir/Metadata/import-list.csv"
 			done
-
-			SampleCount=$(wc -l < "$ProjectDir/Metadata/import-list.csv") #counts (wc) the number of lines (-l) in an input file (<). Putting the command within $() allows you to save the value to a variable, which we can then print to the terminal
-			echo -e "${BLUE}Samples detected in directory = ${GREEN}$SampleCount${NOCOLOUR}"
 
 			# Generate list of reverse reads (assumes reads end in R2.fastq.gz)
 			ls $ReadDir/*R2*fastq* | while read i; do
-			     echo "$(basename $i | cut -f 1 -d '-'),$ReadDir/$i,reverse" >> "$ProjectDir/Metadata/import-list.csv"
+			     echo "$(basename $i | cut -f 1 -d '-'),$i,reverse" >> "$ProjectDir/Metadata/import-list.csv"
 			done
 		else
 			echo -e "${RED}Directory does not exist: ${GREEN}$ReadDir${NOCOLOUR}"
@@ -187,7 +214,7 @@ if ! grep -i -q "Diversity profile target" $ParFile; then echo -e "Diversity pro
 
 
 if [ $taxa == "nil" ]; then
-	if [ $divprotarget == "ITS"]; then
+	if [ $divprotarget == "ITS" ]; then
 		taxa="ITS"
 	else
 		taxa="SILVA"
@@ -201,12 +228,13 @@ if [ $classifier_fna == "nil" ]; then
 	echo -e "${BLUE}Please enter location of the sequence/fna database (eg SILVA/rep_set/rep_set_16S_only/97/silva_132_97_16S.fna)${NOCOLOUR}"
 	read -e classifier_fna
 	classifier_fna_dir=$(dirname $classifier_fna)
-	classifier_fna=$(basename -s ".fna" classifier_fna)
+	classifier_fna=$(basename -s ".fna" $classifier_fna)
 	echo -e "${BLUE}Please enter location of the taxonomy database (eg SILVA/taxonomy/16S_only/97/consensus_taxonomy_all_levels.txt)${NOCOLOUR}"
 	read -e classifier_taxa
 	classifier_taxa_dir=$(dirname $classifier_taxa)
-	classifier_taxa=$(basename -s ".txt" classifier_taxa)
+	classifier_taxa=$(basename -s ".txt" $classifier_taxa)
 fi
+
 if ! grep -i -q "Taxonomy FNA directory" $ParFile; then echo -e "Taxonomy FNA directory	$classifier_fna_dir" >> $ParFile; fi
 if ! grep -i -q "Taxonomy FNA file" $ParFile; then echo -e "Taxonomy FNA file	$classifier_fna" >> $ParFile; fi
 if ! grep -i -q "Taxonomy taxa name directory" $ParFile; then echo -e "Taxonomy taxa name directory	$classifier_taxa_dir" >> $ParFile; fi
@@ -217,7 +245,7 @@ if ! grep -i -q "Taxonomy taxa name file" $ParFile; then echo -e "Taxonomy taxa 
 if [ $divprotarget == "16S" ]; then
 	if [ $F_primer == "nil" ]; then
 		Switch="0"
-		while [ Switch -eq "0"]; do
+		while [ $Switch -eq "0" ]; do
 			echo -e "${BLUE}Please enter the number corresponding to your FORWARD primer, or 'C' for custom${NOCOLOUR}"
 			echo -e "${YELLOW}"
 			echo -e "1) V1\t27F\tAGAGTTTGATCMTGGCTCAG"
@@ -262,7 +290,7 @@ if [ $divprotarget == "16S" ]; then
 	fi
 	if [ $R_primer == "nil" ]; then
 		Switch="0"
-		while [ Switch -eq "0"]; do
+		while [ $Switch -eq "0" ]; do
 			echo -e "${BLUE}Please enter the number corresponding to your REVERSE primer, or 'C' for custom${NOCOLOUR}"
 			echo -e "${YELLOW}"
 			echo -e "1) V3\t519R\tGWATTACCGCGGCKGCTG"
@@ -324,7 +352,7 @@ if ! grep -i -q "Reverse primer" $ParFile; then echo -e "Reverse primer	$R_prime
 if ! grep -i -q "R_primer start" $ParFile; then echo -e "R_primer start	$R_Position" >> $ParFile; fi
 
 
-if [ $ReadLength = "nil" ]; then
+if [ $ReadLength == "nil" ]; then
 	echo -e "${BLUE}Please enter the desired length of all reads (e.g. MiSeq will be 250 or 300)${NOCOLOUR}"
 	read -e ReadLength
 fi
@@ -346,6 +374,11 @@ if [ ! -e "$ProjectDir/Metadata/$Project.tabulated-sample-metadata.qzv" ]; then
 			MappingCount=$((MappingCount-2))
 			echo -e "${BLUE}Samples detected in mapping file = ${GREEN}$MappingCount${NOCOLOUR}"
 			sleep 1s
+			SampleCount=$(wc -l < "$ProjectDir/Metadata/import-list.csv") #counts (wc) the number of lines (-l) in an input file (<). Putting the command within $() allows you to save the value to a variable, which we can then print to the terminal
+			SampleCount=$((SampleCount-1))
+			SampleCount=$((SampleCount/2))
+			echo -e "${BLUE}Samples detected in directory = ${GREEN}$SampleCount${NOCOLOUR}"
+
 			if [ $SampleCount -ne $MappingCount ]; then
 				echo -e "${RED}The number of samples in the mapping file ($MappingCount) does not match the number detected in the read directory ($SampleCount), please rectify to continue${NOCOLOUR}"
 			else
@@ -369,7 +402,7 @@ fi
 ### ADD CATEGORIES FOR TESTING HERE
 
 echo -e "${BLUE}The first two rows of your mapping file look like this:${YELLOW}"
-head -2 "$ProjectDir/Metadata/$Project.txt"
+head -2 "$ProjectDir/Metadata/$Project.head.tsv"
 sleep 1s
 
 if [ ! -e "$ProjectDir/Metadata/Groups.txt" ]; then
@@ -412,28 +445,37 @@ else
 					Count=$((Count+1))
 				else
 					echo -e "${RED}Error: That treatment group does not appear in your mapping file, please try again${YELLOW}"
-					head -2 "$ProjectDir/Metadata/$Project.txt"
+					head -2 "$ProjectDir/Metadata/$Project.head.tsv"
 					echo -e "${NOCOLOUR}"
 				fi
 			done
 		fi
 		echo -e "${BLUE}Your selected treatments are:${GREEN}"
 		cat "$ProjectDir/Metadata/Groups.txt"
+		echo -e "${NOCOLOUR}"
 		Switch="1"
 		done
 fi
 
+
+#Start qiime2 environment in conda
+echo "Loading qiime2 environment: $environment"
+source activate $environment
+#Make tab completion available, not needed in a pipeline, but here to remind me!
+#	source tab-qiime
 
 #Import reads to qiime format from 'import-list' generated with previous code
 if [ ! -e "$ProjectDir/Original_reads/original-paired-end.qza" ]; then
 	if [ ! -d  "$ProjectDir/Original_reads" ]; then
 		mkdir "$ProjectDir/Original_reads"
 	fi
+	echo -e "$(date)" | tee -a $Progress
+	echo -e "importing reads" | tee -a $Progress
 	qiime tools import \
 		--type 'SampleData[PairedEndSequencesWithQuality]' \
 		--input-path "$ProjectDir/Metadata/import-list.csv" \
 		--output-path "$ProjectDir/Original_reads/original-paired-end.qza" \
-		--source-format PairedEndFastqManifestPhred33 # make this a selecctable variable
+		--input-format PairedEndFastqManifestPhred33 # make this a selecctable variable
 fi
 
 
@@ -442,10 +484,13 @@ fi
 
 #length=$(($R_Position - $F_Position))
 
-if [ ! -e "$ProjectDir/dada2/dada2-rep-seqs.qza" ]; then
-	if [ ! -d "$ProjectDir/dada2" ]; then
-		mkdir "$ProjectDir/dada2"
-	fi
+if [ ! -d "$ProjectDir/dada2" ]; then
+	mkdir "$ProjectDir/dada2"
+fi
+
+if [ ! -e "$ProjectDir/dada2/rep-seqs.qza" ]; then
+	echo -e "$(date)" | tee -a $Progress
+	echo -e "Running dada2" | tee -a $Progress
 	qiime dada2 denoise-paired \
 	     --i-demultiplexed-seqs "$ProjectDir/Original_reads/original-paired-end.qza" \
 	     --p-trim-left-f 15 \
@@ -457,7 +502,10 @@ if [ ! -e "$ProjectDir/dada2/dada2-rep-seqs.qza" ]; then
 	     --o-denoising-stats "$ProjectDir/dada2/denoising-stats.qza"
 fi
 
+
 if [ ! -e "$ProjectDir/dada2/out-table.qzv" ]; then
+	echo -e "$(date)" | tee -a $Progress
+	echo -e "producing dada2 visualization" | tee -a $Progress
 	#FeatureTable and FeatureData summaries
 	qiime feature-table summarize \
 	  --i-table "$ProjectDir/dada2/out-table.qza" \
@@ -473,7 +521,9 @@ fi
 
 
 if [ ! -e "$classifier_fna_dir/$classifier_fna.qza" ]; then
-	     # Load representative sequences
+	# Load representative sequences
+	echo -e "$(date)" | tee -a $Progress
+	echo -e "importing classifier fna from $classifier_fna_dir/$classifier_fna.fna" | tee -a $Progress
 	qiime tools import \
 	     --type 'FeatureData[Sequence]' \
 	     --input-path "$classifier_fna_dir/$classifier_fna.fna" \
@@ -481,15 +531,19 @@ if [ ! -e "$classifier_fna_dir/$classifier_fna.qza" ]; then
 fi
 
 if [ ! -e "$classifier_taxa_dir/$classifier_taxa.qza" ]; then
+	echo -e "$(date)" | tee -a $Progress
+	echo -e "importing taxa for classifier from $classifier_taxa_dir/$classifier_taxa.txt" | tee -a $Progress
 	     # Load associated taxonomy
 	qiime tools import \
 	     --type 'FeatureData[Taxonomy]' \
-	     --source-format HeaderlessTSVTaxonomyFormat \
+	     --input-format HeaderlessTSVTaxonomyFormat \
 	     --input-path "$classifier_taxa_dir/$classifier_taxa.txt" \
 	     --output-path "$classifier_taxa_dir/$classifier_taxa.qza"
 fi
 
 if [ ! -e "$classifier_fna_dir/${classifier_fna}_${F_primerName}-${R_primerName}.qza" ]; then
+	echo -e "$(date)" | tee -a $Progress
+	echo -e "trimming classifier fna to input primers $F_primerName and $R_primerName" | tee -a $Progress
 	     # Remove sections of reads outside V3-V4, better for classifier
 	qiime feature-classifier extract-reads \
 	     --i-sequences "$classifier_fna_dir/$classifier_fna.qza" \
@@ -500,6 +554,8 @@ if [ ! -e "$classifier_fna_dir/${classifier_fna}_${F_primerName}-${R_primerName}
 fi
 
 if [ ! -e "$classifier_fna_dir/${classifier_fna}_${F_primerName}-${R_primerName}-classifier.qza" ]; then
+	echo -e "$(date)" | tee -a $Progress
+	echo -e "Running naive bayes classifier" | tee -a $Progress
 	     # Run naive bayes classifier on samples (training of classifier)
 	qiime feature-classifier fit-classifier-naive-bayes \
 	     --i-reference-reads "$classifier_fna_dir/${classifier_fna}_${F_primerName}-${R_primerName}.qza" \
@@ -513,6 +569,8 @@ if [ ! -d "$ProjectDir/Taxonomy" ]; then
 fi
 
 if [ ! -e "$ProjectDir/Taxonomy/$divprotarget.qza" ]; then
+	echo -e "$(date)" | tee -a $Progress
+	echo -e "Assigning taxonomy of ref-seqs based on naive bayes classifier" | tee -a $Progress
      # Use sklearn to classify taxonomy of the representative reads
 	qiime feature-classifier classify-sklearn \
 	     --i-classifier "$classifier_fna_dir/${classifier_fna}_${F_primerName}-${R_primerName}-classifier.qza" \
@@ -531,6 +589,8 @@ fi
 
 # Generates bar charts of taxa
 if [ ! -e "$ProjectDir/Taxonomy/$divprotarget-bar-plots.qzv" ]; then
+	echo -e "$(date)" | tee -a $Progress
+	echo -e "generating bar plots" | tee -a $Progress
 	qiime taxa barplot \
 		--i-table "$ProjectDir/dada2/out-table.qza" \
 		--i-taxonomy "$ProjectDir/Taxonomy/$divprotarget.qza" \
@@ -557,35 +617,42 @@ fi
 # fi
 
 # Collapse at various levels and analyse with ANCOM
-while read Category; do
-	Count="6"
-	while [ $Count -gt "0" ]; do
-		if [ ! -e "$ProjectDir/Taxonomy/$divprotarget.L$Count.qza" ]; then
-			qiime taxa collapse \
-				--i-table "$ProjectDir/dada2/out-table.qza" \
-				--i-taxonomy "$ProjectDir/Taxonomy/$divprotarget.qza" \
-				--p-level $Count \
-				--o-collapsed-table "$ProjectDir/Taxonomy/$divprotarget.L$Count.qza"
-		fi
+Count="6"
+while [ $Count -gt "0" ]; do
+	if [ ! -e "$ProjectDir/Taxonomy/$divprotarget.L$Count.qza" ]; then
+		echo -e "$(date)" | tee -a $Progress
+		echo -e "collapsing reads at L$Count" | tee -a $Progress
+		qiime taxa collapse \
+			--i-table "$ProjectDir/dada2/out-table.qza" \
+			--i-taxonomy "$ProjectDir/Taxonomy/$divprotarget.qza" \
+			--p-level $Count \
+			--o-collapsed-table "$ProjectDir/Taxonomy/$divprotarget.L$Count.qza"
+	fi
 
-		     # Add pseudocount for expression/abundance comparsion (removes zeros)
-		if [ ! -e "$ProjectDir/ANCOM/$divprotarget.L$Count.pseudo-table.qza" ]; then
-			qiime composition add-pseudocount \
-				--i-table "$ProjectDir/Taxonomy/$divprotarget.L$Count.qza" \
-				--o-composition-table "$ProjectDir/ANCOM/$divprotarget.L$Count.pseudo-table.qza"
-		fi
+	     # Add pseudocount for expression/abundance comparsion (removes zeros)
+	if [ ! -e "$ProjectDir/ANCOM/$divprotarget.L$Count.pseudo-table.qza" ]; then
+		echo -e "$(date)" | tee -a $Progress
+		echo -e "Adding pseudocount to reads for L$Count" | tee -a $Progress
+		qiime composition add-pseudocount \
+			--i-table "$ProjectDir/Taxonomy/$divprotarget.L$Count.qza" \
+			--o-composition-table "$ProjectDir/ANCOM/$divprotarget.L$Count.pseudo-table.qza"
+	fi
 
+	while read Category; do
 		# Composition comparison at specified level with ANCOM
 		if [ ! -e "$ProjectDir/ANCOM/ancom-L$Count-$Category.qzv" ]; then
+			echo -e "$(date)" | tee -a $Progress
+			echo -e "Running ANCOM for L$Count for $Category" | tee -a $Progress
 			qiime composition ancom \
 				--i-table "$ProjectDir/ANCOM/$divprotarget.L$Count.pseudo-table.qza" \
 				--m-metadata-file "$ProjectDir/Metadata/$Project.metadata.tsv" \
 				--m-metadata-column $Category \
 				--o-visualization "$ProjectDir/ANCOM/ancom-L$Count-$Category.qzv"
 		fi
-		Count=$((Count-1))
-	done
-done < "$ProjectDir/Metadata/Groups.txt"
+	done < "$ProjectDir/Metadata/Groups.txt"
+	Count=$((Count-1))
+done
+
 
 
 #Generate a tree for phylogenetic diversity analyses¶
@@ -595,12 +662,14 @@ if [ ! -d "$ProjectDir/Phylogeny" ]; then
 fi
 
 if [ ! -e "$ProjectDir/Phylogeny/aligned-rep-seqs.qza" ]; then
-qiime phylogeny align-to-tree-mafft-fasttree \
-	--i-sequences "$ProjectDir/dada2/rep-seqs.qza" \
-	--o-alignment "$ProjectDir/Phylogeny/aligned-rep-seqs.qza" \
-	--o-masked-alignment "$ProjectDir/Phylogeny/masked-aligned-rep-seqs.qza" \
-	--o-tree "$ProjectDir/Phylogeny/unrooted-tree.qza" \
-	--o-rooted-tree "$ProjectDir/Phylogeny/rooted-tree.qza"
+	echo -e "$(date)" | tee -a $Progress
+	echo -e "Producing phylogenetic tree" | tee -a $Progress
+	qiime phylogeny align-to-tree-mafft-fasttree \
+		--i-sequences "$ProjectDir/dada2/rep-seqs.qza" \
+		--o-alignment "$ProjectDir/Phylogeny/aligned-rep-seqs.qza" \
+		--o-masked-alignment "$ProjectDir/Phylogeny/masked-aligned-rep-seqs.qza" \
+		--o-tree "$ProjectDir/Phylogeny/unrooted-tree.qza" \
+		--o-rooted-tree "$ProjectDir/Phylogeny/rooted-tree.qza"
 fi
 
 #Alpha and beta diversity analysis
@@ -609,6 +678,8 @@ if [ ! -d "$ProjectDir/DiversityMetrics" ]; then
 fi
 
 if [ $(ls "ProjectDir/DiversityMetrics/" | wc -l) -lt "17" ]; then
+	echo -e "$(date)" | tee -a $Progress
+	echo -e "Producing diversity metrics" | tee -a $Progress
 	qiime diversity core-metrics-phylogenetic \
 		--i-phylogeny "$ProjectDir/Phylogeny/rooted-tree.qza" \
 		--i-table "$ProjectDir/dada2/out-table.qza" \
@@ -644,6 +715,8 @@ fi
 
 
 while read i; do
+	echo -e "$(date)" | tee -a $Progress
+	echo -e "Producing $i visualization" | tee -a $Progress
 	if [ ! -e "$ProjectDir/DiversityMetrics/$i.qzv" ]; then
 		qiime diversity alpha-group-significance \
 			--i-alpha-diversity "$ProjectDir/DiversityMetrics/$i.qza" \
@@ -654,6 +727,8 @@ done < "$ProjectDir/Metadata/$Project.alpha-metrics.txt"
 
 while read i; do
 	if [ ! -e "$ProjectDir/DiversityMetrics/$i.qzv" ]; then
+		echo -e "$(date)" | tee -a $Progress
+		echo -e "Producing $i visualization" | tee -a $Progress
 		qiime diversity beta-group-significance \
 			--i-distance-matrix "$ProjectDir/DiversityMetrics/$i.qza" \
 			--m-metadata-file "$ProjectDir/Metadata/$Project.metadata.tsv" \
