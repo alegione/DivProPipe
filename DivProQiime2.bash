@@ -88,16 +88,15 @@ fi
 if [ $Dir == "nil" ]; then
 	Switch="0"
 	while [ "$Switch" -eq "0" ]; do
-		echo -e "${BLUE}Please enter your home directory ${YELLOW}(ie: Documents/YOURNAME):${NOCOLOUR}"
+		echo -e "${BLUE}Please the directory where you keep your projects${YELLOW}(eg: Documents/YOURNAME):${NOCOLOUR}"
 		read -e Dir
 		if [ ! -d $Dir ]; then
 			echo -e "${RED}No directory of that name exists${NOCOLOUR}"
 			echo -e "Would you like to create it? (Y/N)${NOCOLOUR}"
-			read -N 1 yesno
-			echo -e "\n"
+			read -e -N 1 yesno
 			yesno=$(echo -e "$yesno" | tr '[:upper:]' '[:lower:]')
 			if [ $yesno = "y" ]; then
-				mkdir "$Dir/"
+				mkdir "$Dir"
 				Switch="1"
 			fi
 		else
@@ -108,9 +107,8 @@ fi
 
 if [ $Project == "nil" ]; then
 #ask user the name of the project for file name/directory purposes
-	echo -e "${BLUE}Please enter a project title:${NOCOLOUR}"
+	echo -e "${BLUE}Please enter a title for your project:${NOCOLOUR}"
 	read -e Project
-	echo -e "${BLUE}You entered: ${GREEN}$Project${NOCOLOUR}"
 fi
 
 ProjectDir="${Dir}/${Project}" #the location to store the project files
@@ -127,8 +125,9 @@ if [ ! -d "$ProjectDir" ]; then #if the project directory doesn't exist, create 
 	mkdir $ProjectDir/Metadata
 fi
 
-if ! grep -i -q "User" $ParFile; then echo -e "User	$Dir" >> $ParFile; fi
-if ! grep -i -q "Project" $ParFile; then echo -e "Project	$Project" >> $ParFile; fi
+if ! grep -i -q "Project folder" $ParFile; then echo -e "Project folder	$Dir" >> $ParFile; fi
+if ! grep -i -q "Project name" $ParFile; then echo -e "Project name	$Project" >> $ParFile; fi
+
 
 if [ $ReadDir == "nil" ]; then
 	Switch=0
@@ -158,18 +157,18 @@ if [ $ReadDir == "nil" ]; then
 fi
 
 
-# Adjust to remove case sensitivity (see below in $taxa)
+
 if [ $divprotarget == "nil" ]; then
-	Switch=0
+	Switch="0"
 	while [ "$Switch" -eq "0" ]; do
 		echo -e "${BLUE}Please enter the diversity target (16S or ITS)${NOCOLOUR}"
 		read -e divprotarget
-		divprotarget=$(echo -e "$divprotarget" | tr '[:lower:]' '[:upper:]')	# HAVENT TESTED IF THIS WORKS
+		divprotarget=$(echo -e "$divprotarget" | tr '[:lower:]' '[:upper:]')
 		if [ $divprotarget == "ITS" ]; then
-			Switch=1
+			Switch="1"
 			echo -e "${BLUE}You entered: ${GREEN}$divprotarget${NOCOLOUR}"
 		elif [ $divprotarget == "16S" ]; then
-			Switch=1
+			Switch="1"
 			echo -e "${BLUE}You entered: ${GREEN}$divprotarget${NOCOLOUR}"
 		else
 			echo -e "${RED}Please only enter one of ITS or 16S${NOCOLOUR}"
@@ -178,6 +177,35 @@ if [ $divprotarget == "nil" ]; then
 fi
 
 if ! grep -i -q "Diversity profile target" $ParFile; then echo -e "Diversity profile target	$divprotarget" >> $ParFile; fi
+
+
+if [ $taxa == "nil" ]; then
+	if [ $divprotarget == "ITS"]; then
+		taxa="ITS"
+	else
+		taxa="SILVA"
+	fi
+fi
+
+if ! grep -i -q "Taxonomy database" $ParFile; then echo -e "Taxonomy database	$taxa" >> $ParFile; fi
+
+
+if [ $classifier_fna == "nil" ]; then
+	echo -e "${BLUE}Please enter location of the sequence/fna database (eg SILVA/rep_set/rep_set_16S_only/97/silva_132_97_16S.fna)${NOCOLOUR}"
+	read -e classifier_fna
+	classifier_fna_dir=$(dirname $classifier_fna)
+	classifier_fna=$(basename -s ".fna" classifier_fna)
+	echo -e "${BLUE}Please enter location of the taxonomy database (eg SILVA/taxonomy/16S_only/97/consensus_taxonomy_all_levels.txt)${NOCOLOUR}"
+	read -e classifier_taxa
+	classifier_taxa_dir=$(dirname $classifier_taxa)
+	classifier_taxa=$(basename -s ".txt" classifier_taxa)
+fi
+if ! grep -i -q "Taxonomy FNA directory" $ParFile; then echo -e "Taxonomy FNA directory	$classifier_fna_dir" >> $ParFile; fi
+if ! grep -i -q "Taxonomy FNA file" $ParFile; then echo -e "Taxonomy FNA file	$classifier_fna" >> $ParFile; fi
+if ! grep -i -q "Taxonomy taxa name directory" $ParFile; then echo -e "Taxonomy taxa name directory	$classifier_taxa_dir" >> $ParFile; fi
+if ! grep -i -q "Taxonomy taxa name file" $ParFile; then echo -e "Taxonomy taxa name file	$classifier_taxa" >> $ParFile; fi
+
+
 
 if [ $divprotarget == "16S" ]; then
 	if [ $F_primer == "nil" ]; then
@@ -292,47 +320,22 @@ if ! grep -i -q "R_primer start" $ParFile; then echo -e "R_primer start	$R_Posit
 if [ $ReadLength = "nil" ]; then
 	echo -e "${BLUE}Please enter the desired length of all reads (e.g. MiSeq will be 250 or 300)${NOCOLOUR}"
 	read -e ReadLength
-	if ! grep -i -q "Read Length" $ParFile; then echo -e "Read Length	$ReadLength" >> $ParFile; fi
 fi
 
-#Would be good to change this to a 'case'
-if [ $taxa == "nil" ]; then
-	if [ $divprotarget == "ITS"]; then
-		taxa="ITS"
-	else
-		taxa="SILVA"
-	fi
-	if ! grep -i -q "Taxonomy database" $ParFile; then echo -e "Taxonomy database	$taxa" >> $ParFile; fi
-fi
-
-if [ $classifier_fna == "nil" ]; then
-	echo -e "${BLUE}Please enter location of the sequence/fna database (eg SILVA/rep_set/rep_set_16S_only/97/silva_132_97_16S.fna)${NOCOLOUR}"
-	read -e classifier_fna
-	classifier_fna_dir=$(dirname $classifier_fna)
-	classifier_fna=$(basename -s ".fna" classifier_fna)
-	echo -e "${BLUE}Please enter location of the taxonomy database (eg SILVA/taxonomy/16S_only/97/consensus_taxonomy_all_levels.txt)${NOCOLOUR}"
-	read -e classifier_taxa
-	classifier_taxa_dir=$(dirname $classifier_taxa)
-	classifier_taxa=$(basename -s ".txt" classifier_taxa)
-	if ! grep -i -q "Taxonomy FNA directory" $ParFile; then echo -e "Taxonomy FNA directory	$classifier_fna_dir" >> $ParFile; fi
-	if ! grep -i -q "Taxonomy FNA file" $ParFile; then echo -e "Taxonomy FNA file	$classifier_fna" >> $ParFile; fi
-	if ! grep -i -q "Taxonomy taxa name directory" $ParFile; then echo -e "Taxonomy taxa name directory	$classifier_taxa_dir" >> $ParFile; fi
-	if ! grep -i -q "Taxonomy taxa name file" $ParFile; then echo -e "Taxonomy taxa name file	$classifier_taxa" >> $ParFile; fi
-fi
-
+if ! grep -i -q "Read Length" $ParFile; then echo -e "Read Length	$ReadLength" >> $ParFile; fi
 
 
 Progress="$Dir/$Project.progress.txt"
 
-if [ ! -e "$ProjectDir/Metadata/$Project.txt" ]; then
-	Switch=0
+if [ ! -e "$ProjectDir/Metadata/$Project.tabulated-sample-metadata.qzv" ]; then
+	Switch="0"
 	while [ "$Switch" -eq "0" ]; do
 		echo -e "${BLUE}Please indicate the location of your Metadata/Mapping file${NOCOLOUR}"
 		read -e Mapping
 		if [ -e $Mapping ]; then
-			Switch=1
-			echo -e "${BLUE}You entered ${GREEN}$Mapping${NOCOLOUR}"
-			echo -e "${BLUE}Moving mapping file to ${GREEN}$ProjectDir/Metadata/$Project.qzv${NOCOLOUR}" | tee -a $Progress
+			Switch="1"
+			echo -e "${BLUE}You entered ${GREEN}$Mapping${NOCOLOUR}" | tee -a $Progress
+			echo -e "${BLUE}Moving mapping file to ${GREEN}$ProjectDir/Metadata/$Project.(tsv|qzv)${NOCOLOUR}" | tee -a $Progress
 			cat $Mapping > "$ProjectDir/Metadata/$Project.metadata.tsv"
 			# Load metadata file into qiime2
 			qiime metadata tabulate \
