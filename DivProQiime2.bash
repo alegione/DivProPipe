@@ -493,13 +493,15 @@ if [ ! -e "$ProjectDir/dada2/rep-seqs.qza" ]; then
 	echo -e "Running dada2" | tee -a $Progress
 	qiime dada2 denoise-paired \
 	     --i-demultiplexed-seqs "$ProjectDir/Original_reads/original-paired-end.qza" \
+		--p-n-threads 0 \
 	     --p-trim-left-f 15 \
 	     --p-trim-left-r 15 \
 	     --p-trunc-len-f $ReadLength \
 	     --p-trunc-len-r $ReadLength \
 	     --o-table "$ProjectDir/dada2/out-table.qza" \
 	     --o-representative-sequences "$ProjectDir/dada2/rep-seqs.qza" \
-	     --o-denoising-stats "$ProjectDir/dada2/denoising-stats.qza"
+	     --o-denoising-stats "$ProjectDir/dada2/denoising-stats.qza" \
+		--verbose
 fi
 
 
