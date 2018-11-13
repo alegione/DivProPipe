@@ -677,6 +677,7 @@ if [ ! -e "$ProjectDir/Phylogeny/aligned-rep-seqs.qza" ]; then
 	echo -e "$(date)" | tee -a $Progress
 	echo -e "Producing phylogenetic tree" | tee -a $Progress
 	qiime phylogeny align-to-tree-mafft-fasttree \
+		--p-n-threads 0 \
 		--i-sequences "$ProjectDir/dada2/rep-seqs.qza" \
 		--o-alignment "$ProjectDir/Phylogeny/aligned-rep-seqs.qza" \
 		--o-masked-alignment "$ProjectDir/Phylogeny/masked-aligned-rep-seqs.qza" \
@@ -693,6 +694,7 @@ if [ $(ls "$ProjectDir/DiversityMetrics/" | wc -l) -lt "17" ]; then
 	echo -e "$(date)" | tee -a $Progress
 	echo -e "Producing diversity metrics" | tee -a $Progress
 	qiime diversity core-metrics-phylogenetic \
+		--p-n-jobs -1 \
 		--i-phylogeny "$ProjectDir/Phylogeny/rooted-tree.qza" \
 		--i-table "$ProjectDir/dada2/out-table.qza" \
 		--p-sampling-depth 30000 \
