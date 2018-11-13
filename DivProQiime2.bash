@@ -575,6 +575,7 @@ if [ ! -e "$ProjectDir/Taxonomy/$divprotarget.qza" ]; then
 	echo -e "Assigning taxonomy of ref-seqs based on naive bayes classifier" | tee -a $Progress
      # Use sklearn to classify taxonomy of the representative reads
 	qiime feature-classifier classify-sklearn \
+		--p-n-jobs -1 \
 	     --i-classifier "$classifier_fna_dir/${classifier_fna}_${F_primerName}-${R_primerName}-classifier.qza" \
 	     --i-reads "$ProjectDir/dada2/rep-seqs.qza" \
 	     --o-classification "$ProjectDir/Taxonomy/$divprotarget.qza" \
