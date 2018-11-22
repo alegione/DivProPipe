@@ -344,12 +344,6 @@ else
 	fi
 fi
 
-<<<<<<< HEAD
-
-forwardPrimer="CCTAYGGGRBGCASCAG"
-reversePrimer="GGACTACNNGGGTATCTAAT"
-readFormat="PairedEndFastqManifestPhred33"
-=======
 if ! grep -i -q "F_primer name" $ParFile; then echo -e "F_primer name	$F_primerName" >> $ParFile; fi
 if ! grep -i -q "Forward primer" $ParFile; then echo -e "Forward primer	$F_primer" >> $ParFile; fi
 if ! grep -i -q "F_primer start" $ParFile; then echo -e "F_primer start	$F_Position" >> $ParFile; fi
@@ -364,35 +358,16 @@ if [ $ReadLength == "nil" ]; then
 fi
 
 if ! grep -i -q "Read Length" $ParFile; then echo -e "Read Length	$ReadLength" >> $ParFile; fi
->>>>>>> 80802acac055c5e96dd060efc1c950bf93283c35
 
 
 Progress="$Dir/$Project.progress.txt"
 
-<<<<<<< HEAD
-if [ ! -e "$ProjectDir/Metadata/$Project.tsv" ]; then
-	Switch=0
-=======
 if [ ! -e "$ProjectDir/Metadata/$Project.tabulated-sample-metadata.qzv" ]; then
 	Switch="0"
->>>>>>> 80802acac055c5e96dd060efc1c950bf93283c35
 	while [ "$Switch" -eq "0" ]; do
 		echo -e "${BLUE}Please indicate the location of your Metadata/Mapping file${NOCOLOUR}"
 		read -e Mapping
 		if [ -e $Mapping ]; then
-<<<<<<< HEAD
-			Switch=1
-			echo -e "${BLUE}You entered ${GREEN}$Mapping${NOCOLOUR}"
-			echo -e "${BLUE}Moving mapping file to ${GREEN}$ProjectDir/Metadata/$Project.qzv${NOCOLOUR}" | tee -a $Progress
-			cat $Mapping > "$ProjectDir/Metadata/$Project.tsv"
-			# Load metadata file into qiime2
-			qiime metadata tabulate \
-				--m-input-file "$Mapping" \
-				--o-visualization "$ProjectDir/Metadata/$Project.tabulated-sample-metadata.qzv"
-			# MapHead="$ProjectDir/Metadata/$Project.head.tsv"
-			# head -1 $Mapping > $MapHead
-			Mapping="$ProjectDir/Metadata/$Project.tsv"
-=======
 			Switch="1"
 			echo -e "${BLUE}You entered ${GREEN}$Mapping${NOCOLOUR}" | tee -a $Progress
 			MappingCount=$(grep -c '' $Mapping)
@@ -418,7 +393,6 @@ if [ ! -e "$ProjectDir/Metadata/$Project.tabulated-sample-metadata.qzv" ]; then
 				MapHead="$ProjectDir/Metadata/$Project.head.tsv"
 				head -2 $Mapping > $MapHead
 			fi
->>>>>>> 80802acac055c5e96dd060efc1c950bf93283c35
 		else
 			echo -e "${RED}File does not exist: ${GREEN}$Mapping${NOCOLOUR}"
 		fi
@@ -492,16 +466,6 @@ source activate $environment
 
 #Import reads to qiime format from 'import-list' generated with previous code
 if [ ! -e "$ProjectDir/Original_reads/original-paired-end.qza" ]; then
-<<<<<<< HEAD
-			if [ ! -d  "$ProjectDir/Original_reads" ]; then
-				mkdir "$ProjectDir/Original_reads"
-			fi
-			qiime tools import \
-		     --type 'SampleData[PairedEndSequencesWithQuality]' \
-		     --input-path "$ProjectDir/Metadata/import-list.csv" \
-		     --output-path "$ProjectDir/Original_reads/original-paired-end.qza" \
-		     --source-format $readFormat # make this a selecctable variable
-=======
 	if [ ! -d  "$ProjectDir/Original_reads" ]; then
 		mkdir "$ProjectDir/Original_reads"
 	fi
@@ -512,7 +476,6 @@ if [ ! -e "$ProjectDir/Original_reads/original-paired-end.qza" ]; then
 		--input-path "$ProjectDir/Metadata/import-list.csv" \
 		--output-path "$ProjectDir/Original_reads/original-paired-end.qza" \
 		--input-format PairedEndFastqManifestPhred33 # make this a selecctable variable
->>>>>>> 80802acac055c5e96dd060efc1c950bf93283c35
 fi
 
 
@@ -585,19 +548,12 @@ if [ ! -e "$classifier_fna_dir/${classifier_fna}_${F_primerName}-${R_primerName}
 	echo -e "trimming classifier fna to input primers $F_primerName and $R_primerName" | tee -a $Progress
 	     # Remove sections of reads outside V3-V4, better for classifier
 	qiime feature-classifier extract-reads \
-<<<<<<< HEAD
-	     --i-sequences 16S_metagenomics/ReferenceSets/SILVA/rep_set/rep_set_16S_only/97/silva_132_97_16S.qza \
-	     --p-f-primer $forwardPrimer \
-	     --p-r-primer $reversePrimer \
-	     --o-reads 16S_metagenomics/ReferenceSets/SILVA/rep_set/rep_set_16S_only/97/silva_132_97_16S_V3V4.qza
-=======
 	     --i-sequences "$classifier_fna_dir/$classifier_fna.qza" \
 	     --p-f-primer "$F_primer" \
 	     --p-r-primer "$R_primer" \
 	     --o-reads "$classifier_fna_dir/${classifier_fna}_${F_primerName}-${R_primerName}.qza" \
 		--verbose
 fi
->>>>>>> 80802acac055c5e96dd060efc1c950bf93283c35
 
 if [ ! -e "$classifier_fna_dir/${classifier_fna}_${F_primerName}-${R_primerName}-classifier.qza" ]; then
 	echo -e "$(date)" | tee -a $Progress
@@ -618,47 +574,6 @@ if [ ! -e "$ProjectDir/Taxonomy/$divprotarget.qza" ]; then
 	echo -e "$(date)" | tee -a $Progress
 	echo -e "Assigning taxonomy of ref-seqs based on naive bayes classifier" | tee -a $Progress
      # Use sklearn to classify taxonomy of the representative reads
-<<<<<<< HEAD
-qiime feature-classifier classify-sklearn \
-     --i-classifier 16S_metagenomics/ReferenceSets/SILVA/97-V3V4-classifier.qza \
-     --i-reads "$ProjectDir/dada2/dada2-rep-seqs.qza" \
-     --o-classification "$ProjectDir/Taxonomy/$taxa/absolute/$Project.taxa.qza"
-
-     # Can't remember what this does...generates an output of the taxa to view?
-qiime metadata tabulate \
-     --m-input-file "$ProjectDir/Taxonomy/$taxa/absolute/$Project.taxa.qza" \
-     --o-visualization "$ProjectDir/Taxonomy/$taxa/absolute/$Project.taxa.qva"
-
-
-		 qiime taxa barplot \
-	   --i-table table.qza \
-	   --i-taxonomy "$ProjectDir/Taxonomy/$taxa/absolute/$Project.taxa.qza" \
-	   --m-metadata-file $Mapping \
-	   --o-visualization "$ProjectDir/Taxonomy/$taxa/absolute/$Project.taxa-bar-plots.qzv"
-
-##### COPIED FROM TUTORIALS, HAVEN'T RUN ANY OF THESE
-
-#FeatureTable and FeatureData summaries
-qiime feature-table summarize \
-  --i-table table.qza \
-  --o-visualization table.qzv \
-  --m-sample-metadata-file sample-metadata.tsv
-qiime feature-table tabulate-seqs \
-  --i-data rep-seqs.qza \
-  --o-visualization rep-seqs.qzv
-
-
-# Taxonomic analysis
-  qiime feature-classifier classify-sklearn \
-    --i-classifier gg-13-8-99-515-806-nb-classifier.qza \
-    --i-reads rep-seqs.qza \
-    --o-classification taxonomy.qza
-
-  qiime metadata tabulate \
-    --m-input-file taxonomy.qza \
-    --o-visualization taxonomy.qzv
-
-=======
 	qiime feature-classifier classify-sklearn \
 		--p-n-jobs -1 \
 	     --i-classifier "$classifier_fna_dir/${classifier_fna}_${F_primerName}-${R_primerName}-classifier.qza" \
@@ -696,7 +611,6 @@ fi
 
 
 ################################################################################
->>>>>>> 80802acac055c5e96dd060efc1c950bf93283c35
 
 # Differential abundance testing with ANCOM
 
