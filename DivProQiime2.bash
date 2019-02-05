@@ -503,6 +503,8 @@ if [ ! -e "$ProjectDir/dada2/rep-seqs.qza" ]; then
 	     --o-denoising-stats "$ProjectDir/dada2/denoising-stats.qza" \
 		--verbose
 fi
+#USE BELOW TO UNZIP FILES AND PULL OUT DATA!
+#unzip 16S.L1.qza -d tmp; mv tmp/*/data 16S.L1; rm -R tmp
 
 
 if [ ! -e "$ProjectDir/dada2/out-table.qzv" ]; then
