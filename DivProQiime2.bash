@@ -506,6 +506,9 @@ fi
 #USE BELOW TO UNZIP FILES AND PULL OUT DATA!
 #unzip 16S.L1.qza -d tmp; mv tmp/*/data 16S.L1; rm -R tmp
 
+#Need to convert biom tables to tsv as often as possible
+#biom convert --to-tsv -i 464737bc-ad72-448c-a36c-d013c621a95e/data/feature-table.biom -o feature-table.tsv
+
 
 if [ ! -e "$ProjectDir/dada2/out-table.qzv" ]; then
 	echo -e "$(date)" | tee -a $Progress
@@ -521,6 +524,12 @@ if [ ! -e "$ProjectDir/dada2/out-table.qzv" ]; then
 	qiime feature-table tabulate-seqs \
 	  --i-data "$ProjectDir/dada2/rep-seqs.qza" \
 	  --o-visualization "$ProjectDir/dada2/rep-seqs.qzv"
+fi
+
+if [ ! -e "$ProjectDir/dada2/denoising-stats.qzv" ]; then
+	qiime metadata tabulate \
+	  --m-input-file "$ProjectDir/dada2/denoising-stats.qza" \
+	  --o-visualization "$ProjectDir/dada2/denoising-stats.qzv"
 fi
 
 
@@ -669,7 +678,7 @@ done
 
 
 
-#Generate a tree for phylogenetic diversity analyses¶
+#Generate a tree for phylogenetic diversity analyses
 
 if [ ! -d "$ProjectDir/Phylogeny" ]; then
 	mkdir "$ProjectDir/Phylogeny"
