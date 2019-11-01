@@ -54,6 +54,9 @@ if [ -e "$1/00-Metadata/Parameters.txt" ]; then
 	if grep -i -q "Taxonomy FNA file" $ParFile; then classifier_fna=$(grep -i "Taxonomy FNA file" $ParFile | cut -f2); echo -e "${GREEN}Taxonomy FNA file: $classifier_fna${NOCOLOUR}"; else classifier_fna="nil";fi
 	if grep -i -q "Taxonomy taxa name directory" $ParFile; then classifier_taxa_dir=$(grep -i "Taxonomy taxa name directory" $ParFile | cut -f2); echo -e "${GREEN}Taxonomy taxa name directory: $classifier_taxa_dir${NOCOLOUR}"; else classifier_taxa_dir="nil";fi
 	if grep -i -q "Taxonomy taxa name file" $ParFile; then classifier_taxa=$(grep -i "Taxonomy taxa name file" $ParFile | cut -f2); echo -e "${GREEN}Taxonomy taxa name file: $classifier_taxa${NOCOLOUR}"; else classifier_taxa="nil";fi
+
+	if grep -i -q "Taxonomy classifier" $ParFile; then classifier_method=$(grep -i "Taxonomy classifier" $ParFile | cut -f2); echo -e "${GREEN}Taxonomy classification method: $classifier_method${NOCOLOUR}"; else classifier_method="nil";fi
+
 	sleep 1
 else
 	environment="nil"
@@ -81,6 +84,7 @@ else
 	classifier_fna="nil"
 	classifier_taxa_dir="nil"
 	classifier_taxa="nil"
+	classifier_method="nil"
 fi
 
 if [ $environment == "nil" ]; then
@@ -245,6 +249,32 @@ if ! grep -i -q "Taxonomy FNA file" $ParFile; then echo -e "Taxonomy FNA file	$c
 if ! grep -i -q "Taxonomy taxa name directory" $ParFile; then echo -e "Taxonomy taxa name directory	$classifier_taxa_dir" >> $ParFile; fi
 if ! grep -i -q "Taxonomy taxa name file" $ParFile; then echo -e "Taxonomy taxa name file	$classifier_taxa" >> $ParFile; fi
 
+if [ $classifier_method == "nil" ]; then
+	Switch="0"
+	while [ $Switch -eq "0" ]; do
+		echo -e "${BLUE}Please enter the number corresponding to the classification method to use${NOCOLOUR}"
+		echo -e "${YELLOW}"
+		echo -e "1) Naive bayes"
+		echo -e "2) Consensus BLAST"
+		echo -e "${NOCOLOUR}"
+		read -e methodSelect
+		case $methodSelect in
+			1)
+			classifier_method="classify-sklearn"
+			Switch="1"
+			;;
+			2)
+			classifier_method="classify-consensus-blast"
+			Switch="1"
+			;;
+			*)
+			echo -e "${RED}ERROR: Please enter an appropriate number${NOCOLOUR}"
+			;;
+		esac
+	done
+fi
+
+if ! grep -i -q "Taxonomy classifier" $ParFile; then echo -e "Taxonomy classifier	$classifier_method" >> $ParFile; fi
 
 
 if [ $divprotarget == "16S" ]; then
@@ -515,25 +545,7 @@ if [ ! -e "$ProjectDir/02-dada2/rep-seqs.qza" ]; then
 		--verbose
 fi
 
-
-#USE BELOW TO UNZIP FILES AND PULL OUT DATA!
-#unzip 16S.L1.qza -d tmp; mv tmp/*/data 16S.L1; rm -R tmp
-
-#Need to convert biom tables to tsv as often as possible
-#biom convert --to-tsv -i 464737bc-ad72-448c-a36c-d013c621a95e/data/feature-table.biom -o feature-table.tsv
-
-
-if [ ! -e "$ProjectDir/02-dada2/out-table.qzv" ]; then
-	echo -e "$(date)" | tee -a $Progress
-	echo -e "producing dada2 visualization" | tee -a $Progress
-	#FeatureTable and FeatureData summaries
-	qiime feature-table summarize \
-	  --i-table "$ProjectDir/02-dada2/out-table.qza" \
-	  --o-visualization "$ProjectDir/02-dada2/out-table.qzv" \
-	  --m-sample-metadata-file "$ProjectDir/00-Metadata/$Project.metadata.tsv"
-fi
-
-if [ ! -e "$ProjectDir/02-dada2/out-table.qzv" ]; then
+if [ ! -e "$ProjectDir/02-dada2/rep-seqs.qzv" ]; then
 	qiime feature-table tabulate-seqs \
 	  --i-data "$ProjectDir/02-dada2/rep-seqs.qza" \
 	  --o-visualization "$ProjectDir/02-dada2/rep-seqs.qzv"
@@ -545,25 +557,13 @@ if [ ! -e "$ProjectDir/02-dada2/denoising-stats.qzv" ]; then
 	  --o-visualization "$ProjectDir/02-dada2/denoising-stats.qzv"
 fi
 
-# #remove Singletons
-# if [ ! -e "$ProjectDir/02-dada2/out-table-NoSingletons.qza" ]; then
-# 	qiime feature-table filter-features \
-# 	  --i-table "$ProjectDir/02-dada2/out-table.qza" \
-# 	  --p-min-samples 2 \
-# 	  --o-filtered-table "$ProjectDir/02-dada2/out-table-NoSingletons.qza"
-# fi
+#USE BELOW TO UNZIP FILES AND PULL OUT DATA!
+#unzip 16S.L1.qza -d tmp; mv tmp/*/data 16S.L1; rm -R tmp
 
-basename -a -s '.qzv' $ProjectDir/02-dada2/*qzv | while read i; do
-	if [ ! -d "$ProjectDir/02-dada2/$i-viz" ]; then
-		unzip -q -d "$ProjectDir/02-dada2/$i-viz" "$ProjectDir/02-dada2/$i.qzv"
-	fi
-done
+#Need to convert biom tables to tsv as often as possible
+#biom convert --to-tsv -i 464737bc-ad72-448c-a36c-d013c621a95e/data/feature-table.biom -o feature-table.tsv
 
-basename -a -s '.qza' $ProjectDir/02-dada2/*qza | while read i; do
-	if [ ! -d "$ProjectDir/02-dada2/$i" ]; then
-		unzip -q -d "$ProjectDir/02-dada2/$i" "$ProjectDir/02-dada2/$i.qza"
-	fi
-done
+
 
 if [ ! -e "$classifier_fna_dir/$classifier_fna.qza" ]; then
 	# Load representative sequences
@@ -598,39 +598,99 @@ if [ ! -e "$classifier_fna_dir/${classifier_fna}_${F_primerName}-${R_primerName}
 		--verbose
 fi
 
-# if [ ! -e "$classifier_fna_dir/${classifier_fna}_${F_primerName}-${R_primerName}-classifier.qza" ]; then
-# 	echo -e "$(date)" | tee -a $Progress
-# 	echo -e "Running naive bayes classifier" | tee -a $Progress
-# 	     # Run naive bayes classifier on samples (training of classifier)
-# 	qiime feature-classifier fit-classifier-naive-bayes \
-# 	     --i-reference-reads "$classifier_fna_dir/${classifier_fna}_${F_primerName}-${R_primerName}.qza" \
-# 	     --i-reference-taxonomy "$classifier_taxa_dir/$classifier_taxa.qza" \
-# 	     --o-classifier "$classifier_fna_dir/${classifier_fna}_${F_primerName}-${R_primerName}-classifier.qza" \
-# 	     --verbose
-#fi
+if [ ! -e "$ProjectDir/02-dada2/rep-seqs-filtered.qza" ]; then
+	echo -e "$(date)" | tee -a $Progress
+	echo -e "Filtering dada2 output sequences based on minimum 80% identity and 90% coverage to ${classifier_fna}_${F_primerName}-${R_primerName}.qza" | tee -a $Progress
+	qiime quality-control exclude-seqs \
+		--i-query-sequences "$ProjectDir/02-dada2/rep-seqs.qza" \
+		--i-reference-sequences "$classifier_fna_dir/${classifier_fna}_${F_primerName}-${R_primerName}.qza" \
+		--p-method vsearch \
+		--p-perc-identity 0.80 \
+		--p-perc-query-aligned 0.90 \
+		--p-threads -1 \
+		--o-sequence-hits "$ProjectDir/02-dada2/rep-seqs-filtered.qza" \
+		--o-sequence-misses "$ProjectDir/02-dada2/removed-seqs-filtered.qza" \
+		--verbose
+fi
+
+
+if [ ! -e "$ProjectDir/02-dada2/out-table.qzv" ]; then
+	echo -e "$(date)" | tee -a $Progress
+	echo -e "producing dada2 visualization" | tee -a $Progress
+	#FeatureTable and FeatureData summaries
+	qiime feature-table summarize \
+	  --i-table "$ProjectDir/02-dada2/out-table.qza" \
+	  --o-visualization "$ProjectDir/02-dada2/out-table.qzv" \
+	  --m-sample-metadata-file "$ProjectDir/00-Metadata/$Project.metadata.tsv"
+fi
+
+if [ ! -e "$ProjectDir/02-dada2/rep-seqs-filtered.qzv" ]; then
+	qiime feature-table tabulate-seqs \
+	  --i-data "$ProjectDir/02-dada2/rep-seqs-filtered.qza" \
+	  --o-visualization "$ProjectDir/02-dada2/rep-seqs-filtered.qzv"
+fi
+
+
+# #remove Singletons
+# if [ ! -e "$ProjectDir/02-dada2/out-table-NoSingletons.qza" ]; then
+# 	qiime feature-table filter-features \
+# 	  --i-table "$ProjectDir/02-dada2/out-table.qza" \
+# 	  --p-min-samples 2 \
+# 	  --o-filtered-table "$ProjectDir/02-dada2/out-table-NoSingletons.qza"
+# fi
+
+basename -a -s '.qzv' $ProjectDir/02-dada2/*qzv | while read i; do
+	if [ ! -d "$ProjectDir/02-dada2/$i-viz" ]; then
+		unzip -q -d "$ProjectDir/02-dada2/$i-viz" "$ProjectDir/02-dada2/$i.qzv"
+	fi
+done
+
+basename -a -s '.qza' $ProjectDir/02-dada2/*qza | while read i; do
+	if [ ! -d "$ProjectDir/02-dada2/$i" ]; then
+		unzip -q -d "$ProjectDir/02-dada2/$i" "$ProjectDir/02-dada2/$i.qza"
+	fi
+done
+
+
+
 
 if [ ! -d "$ProjectDir/03-Taxonomy" ]; then
 	mkdir $ProjectDir/03-Taxonomy
 fi
 
-if [ ! -e "$ProjectDir/03-Taxonomy/$divprotarget-taxa.qza" ]; then
-	# echo -e "$(date)" | tee -a $Progress
-	# echo -e "Assigning taxonomy of ref-seqs based on naive bayes classifier" | tee -a $Progress
-     # Use sklearn to classify taxonomy of the representative reads
-	# qiime feature-classifier classify-sklearn \
-	# 	--p-n-jobs -1 \
-	#      --i-classifier "$classifier_fna_dir/${classifier_fna}_${F_primerName}-${R_primerName}-classifier.qza" \
-	#      --i-reads "$ProjectDir/02-dada2/rep-seqs.qza" \
-	#      --o-classification "$ProjectDir/03-Taxonomy/$divprotarget-taxa.qza" \
-	# 	--verbose
-	echo -e "$(date)" | tee -a $Progress
-	echo -e "Assigning taxonomy of ref-seqs based on consensus blast" | tee -a $Progress
-	qiime feature-classifier classify-consensus-blast \
-		--i-query "$ProjectDir/02-dada2/rep-seqs.qza" \
-		--i-reference-reads "$classifier_fna_dir/${classifier_fna}_${F_primerName}-${R_primerName}.qza" \
-		--i-reference-taxonomy "$classifier_taxa_dir/$classifier_taxa.qza" \
-		--verbose \
-		--o-classification "$ProjectDir/03-Taxonomy/$divprotarget-taxa.qza"
+if [ $classifier_method == "classify-sklearn" ]; then
+	if [ ! -e "$classifier_fna_dir/${classifier_fna}_${F_primerName}-${R_primerName}-classifier.qza" ]; then
+		echo -e "$(date)" | tee -a $Progress
+		echo -e "Running naive bayes classifier" | tee -a $Progress
+		     # Run naive bayes classifier on samples (training of classifier)
+		qiime feature-classifier fit-classifier-naive-bayes \
+		     --i-reference-reads "$classifier_fna_dir/${classifier_fna}_${F_primerName}-${R_primerName}.qza" \
+		     --i-reference-taxonomy "$classifier_taxa_dir/$classifier_taxa.qza" \
+		     --o-classifier "$classifier_fna_dir/${classifier_fna}_${F_primerName}-${R_primerName}-classifier.qza" \
+		     --verbose
+	fi
+	if [ ! -e "$ProjectDir/03-Taxonomy/$divprotarget-taxa.qza" ]; then
+		echo -e "$(date)" | tee -a $Progress
+		echo -e "Assigning taxonomy of ref-seqs based on naive bayes classifier" | tee -a $Progress
+	     Use sklearn to classify taxonomy of the representative reads
+		qiime feature-classifier classify-sklearn \
+			--p-n-jobs -1 \
+		     --i-classifier "$classifier_fna_dir/${classifier_fna}_${F_primerName}-${R_primerName}-classifier.qza" \
+		     --i-reads "$ProjectDir/02-dada2/rep-seqs.qza" \
+		     --o-classification "$ProjectDir/03-Taxonomy/$divprotarget-taxa.qza" \
+			--verbose
+	fi
+else
+	if [ ! -e "$ProjectDir/03-Taxonomy/$divprotarget-taxa.qza" ]; then
+		echo -e "$(date)" | tee -a $Progress
+		echo -e "Assigning taxonomy of ref-seqs based on consensus blast" | tee -a $Progress
+		qiime feature-classifier classify-consensus-blast \
+			--i-query "$ProjectDir/02-dada2/rep-seqs.qza" \
+			--i-reference-reads "$classifier_fna_dir/${classifier_fna}_${F_primerName}-${R_primerName}.qza" \
+			--i-reference-taxonomy "$classifier_taxa_dir/$classifier_taxa.qza" \
+			--verbose \
+			--o-classification "$ProjectDir/03-Taxonomy/$divprotarget-taxa.qza"
+	fi
 fi
 
 if [ ! -e "$ProjectDir/02-dada2/out-table-filtered.qza" ]; then
@@ -849,22 +909,23 @@ if [ ! -e "$ProjectDir/05-Phylogeny/aligned-rep-seqs.qza" ]; then
 		--o-rooted-tree "$ProjectDir/05-Phylogeny/rooted-tree.qza"
 fi
 
+if [ ! -e "$ProjectDir/05-Phylogeny/aligned-rep-seqs.qza" ]; then
+	echo -e "$(date)" | tee -a $Progress
+	echo -e "Producing phylogenetic tree" | tee -a $Progress
+	qiime phylogeny align-to-tree-mafft-fasttree \
+		--p-n-threads 0 \
+		--i-sequences "$ProjectDir/02-dada2/rep-seqs-filtered.qza" \
+		--o-alignment "$ProjectDir/05-Phylogeny/aligned-rep-seqs-filtered.qza" \
+		--o-masked-alignment "$ProjectDir/05-Phylogeny/masked-aligned-rep-seqs-filtered.qza" \
+		--o-tree "$ProjectDir/05-Phylogeny/unrooted-tree-filtered.qza" \
+		--o-rooted-tree "$ProjectDir/05-Phylogeny/rooted-tree-filtered.qza"
+fi
+
+
 #Alpha and beta diversity analysis
 
 #NEED FORMULA FOR THIS
 sampleDepth="1000"
-
-if [ ! -d "$ProjectDir/06-DiversityMetrics-$sampleDepth" ] || [ $(ls "$ProjectDir/06-DiversityMetrics-$sampleDepth/" | wc -l) -lt "17" ]; then
-	echo -e "$(date)" | tee -a $Progress
-	echo -e "Producing diversity metrics" | tee -a $Progress
-	qiime diversity core-metrics-phylogenetic \
-		--p-n-jobs $CORES \
-		--i-phylogeny "$ProjectDir/05-Phylogeny/rooted-tree.qza" \
-		--i-table "$ProjectDir/02-dada2/out-table-filtered.qza" \
-		--p-sampling-depth $sampleDepth \
-		--m-metadata-file "$ProjectDir/00-Metadata/$Project.metadata.tsv" \
-		--output-dir "$ProjectDir/06-DiversityMetrics-$sampleDepth"
-fi
 
 ## Output artifacts:
 if [ ! -e "$ProjectDir/00-Metadata/$Project.alpha-metrics.txt" ]; then
@@ -885,6 +946,67 @@ weighted_unifrac_distance_matrix
 jaccard_distance_matrix
 EOT
 fi
+fi
+
+if [ ! -d "$ProjectDir/06-DiversityMetrics-$sampleDepth-unfiltered" ] || [ $(ls "$ProjectDir/06-DiversityMetrics-$sampleDepth-unfiltered/" | wc -l) -lt "17" ]; then
+	echo -e "$(date)" | tee -a $Progress
+	echo -e "Producing diversity metrics from unfiltered table" | tee -a $Progress
+	qiime diversity core-metrics-phylogenetic \
+		--p-n-jobs $CORES \
+		--i-phylogeny "$ProjectDir/05-Phylogeny/rooted-tree.qza" \
+		--i-table "$ProjectDir/02-dada2/out-table.qza" \
+		--p-sampling-depth $sampleDepth \
+		--m-metadata-file "$ProjectDir/00-Metadata/$Project.metadata.tsv" \
+		--output-dir "$ProjectDir/06-DiversityMetrics-$sampleDepth-unfiltered"
+fi
+
+while read i; do
+	if [ ! -e "$ProjectDir/06-DiversityMetrics-$sampleDepth-unfiltered/$i.qzv" ]; then
+		echo -e "$(date)" | tee -a $Progress
+		echo -e "Producing $i visualization" | tee -a $Progress
+		qiime diversity alpha-group-significance \
+			--i-alpha-diversity "$ProjectDir/06-DiversityMetrics-$sampleDepth-unfiltered/$i.qza" \
+			--m-metadata-file "$ProjectDir/00-Metadata/$Project.metadata.tsv" \
+			--o-visualization "$ProjectDir/06-DiversityMetrics-$sampleDepth-unfiltered/$i.qzv"
+	fi
+done < "$ProjectDir/00-Metadata/$Project.alpha-metrics.txt"
+
+if [ $Comparisons -gt "0" ]; then
+	while read Category; do
+		while read i; do
+			if [ ! -d "$ProjectDir/06-DiversityMetrics-$sampleDepth-unfiltered/$Category.$i.qzv" ]; then
+				echo -e "$(date)" | tee -a $Progress
+				echo -e "Producing $i visualization" | tee -a $Progress
+				qiime diversity beta-group-significance \
+					--i-distance-matrix "$ProjectDir/06-DiversityMetrics-$sampleDepth-unfiltered/$i.qza" \
+					--m-metadata-file "$ProjectDir/00-Metadata/$Project.metadata.tsv" \
+					--m-metadata-column "$Category" \
+					--p-pairwise \
+					--p-permutations 999 \
+					--o-visualization "$ProjectDir/06-DiversityMetrics-$sampleDepth-unfiltered/$Category.$i.qzv" \
+					--verbose
+			fi
+		done < "$ProjectDir/00-Metadata/$Project.beta-metrics.txt"
+	done < "$ProjectDir/00-Metadata/Groups.txt"
+fi
+
+basename -a -s '.qzv' $ProjectDir/06-DiversityMetrics-$sampleDepth-unfiltered/*qzv | while read i; do
+	if [ ! -d "$ProjectDir/06-DiversityMetrics-$sampleDepth-unfiltered/$i" ]; then
+		unzip -q -d "$ProjectDir/06-DiversityMetrics-$sampleDepth-unfiltered/$i" "$ProjectDir/06-DiversityMetrics-$sampleDepth-unfiltered/$i.qzv"
+	fi
+done
+
+
+if [ ! -d "$ProjectDir/06-DiversityMetrics-$sampleDepth" ] || [ $(ls "$ProjectDir/06-DiversityMetrics-$sampleDepth/" | wc -l) -lt "17" ]; then
+	echo -e "$(date)" | tee -a $Progress
+	echo -e "Producing diversity metrics" | tee -a $Progress
+	qiime diversity core-metrics-phylogenetic \
+		--p-n-jobs $CORES \
+		--i-phylogeny "$ProjectDir/05-Phylogeny/rooted-tree-filtered.qza" \
+		--i-table "$ProjectDir/02-dada2/out-table-filtered.qza" \
+		--p-sampling-depth $sampleDepth \
+		--m-metadata-file "$ProjectDir/00-Metadata/$Project.metadata.tsv" \
+		--output-dir "$ProjectDir/06-DiversityMetrics-$sampleDepth"
 fi
 
 while read i; do
